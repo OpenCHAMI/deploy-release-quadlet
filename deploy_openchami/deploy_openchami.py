@@ -202,7 +202,7 @@ def entry():
     """Command entrypoint
 
     """
-    entrypoint(sys.argv)
+    sys.exit(entrypoint(sys.argv))
 
 
 # Start here

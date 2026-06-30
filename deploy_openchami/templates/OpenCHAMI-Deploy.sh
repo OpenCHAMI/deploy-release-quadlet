@@ -406,6 +406,11 @@ for builder in "${IMAGE_BUILDERS[@]}"; do
       yaml_to_json < "${builder}" | jq -r '.options.s3_prefix' |
       sed -e 's:/[[:blank:]]*$::' \
     )"
+    # If there is no S3 prefix for this image builder it means that
+    # only the OCI image is stored, so don't try to get boot
+    # parameters for it.
+    [[ "${S3_PREFIX}" != "null" ]] || continue
+
     generate-boot-config-json \
         "${S3_PREFIX}" \
         "${MANAGEMENT_HEADNODE_IP}" \
