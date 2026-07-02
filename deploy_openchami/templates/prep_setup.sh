@@ -13,6 +13,8 @@ function error_handler() {
     local filename="${1}"; shift
     local lineno="${1}"; shift
     local exitval="${1}"; shift
+    echo "an error occurred -- here is the status of OpenCHAMI Components:" >&2
+    sudo systemctl list-dependencies openchami.target >&2
     echo "exiting on error [${exitval}] from ${filename}:${lineno}" >&2
     exit ${exitval}
 }
