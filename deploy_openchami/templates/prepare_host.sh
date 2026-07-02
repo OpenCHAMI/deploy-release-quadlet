@@ -6,6 +6,12 @@
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" > /dev/null && pwd )"
 source "${SCRIPT_DIR}/prep_setup.sh"
 
+{%- if openchami_config.ochami.build %}
+# Figure out the newest stable release of golang so we can install that.
+# This will be needed to build 'ochami'.
+GOLANG="golang-$(curl -s https://go.dev/VERSION\?m\=text | head -1 | sed -e 's/^go//')"
+{%- endif %}
+
 info "preparing platform - install required packages"
 PRE_INSTALL_PACKAGES="\
         epel-release \
@@ -28,6 +34,10 @@ PACKAGES="\
         openssl \
         nfs-utils \
         s3cmd \
+{%- if openchami_config.ochami.build %}
+        "${GOLANG}" \
+        scdoc \
+{%- endif %}
 {%- for package in hosting_config.extra_packages.main %}
         {{ package }} \
 {%- endfor %}

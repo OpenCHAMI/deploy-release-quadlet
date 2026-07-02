@@ -303,12 +303,23 @@ merge_openchami_env
 info "Starting OpenCHAMI"
 sudo systemctl start openchami.target
 
+{%- if openchami_config.ochami.build %}
+info "retrieving OpenCHAMI CLI (ochami) soure repo"
+sudo rm -rf "${DEPLOY_DIR}/ochami"
+git clone "{{ openchami_config.ochami.url }}" "${DEPLOY_DIR}/ochami"
+OCHAMI_VERSION="{{ openchami_config.ochami.version }}"
+info "building version '${OCHAMI_VERSION}' of 'ochami'"
+cd "${DEPLOY_DIR}/ochami"
+git checkout "${OCHAMI_VERSION}"
+sudo make install
+{%- else %}
 info "retrieving OpenCHAMI CLI (ochami) RPM"
-OCHAMI_CLI_VERSION="latest"
+OCHAMI_CLI_VERSION="{{ openchami_config.ochami.version }}"
 latest_release_url=$(curl -s https://api.github.com/repos/OpenCHAMI/ochami/releases/${OCHAMI_CLI_VERSION} | jq -r ".assets[] | select(.name | endswith(\"$(derive_architecture).rpm\")) | .browser_download_url")
 curl -L "${latest_release_url}" -o ochami.rpm
 info "Installing OpenCHAMI CLI (ochami) RPM"
 sudo dnf install -y ./ochami.rpm
+{%- endif %}
 
 # Configure the OpenCHAMI CLI client
 info "Configuring OpenCHAMI CLI (ochami) Client"

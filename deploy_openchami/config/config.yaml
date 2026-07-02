@@ -333,6 +333,23 @@ openchami_config:
   # nodes.
   metadata_service: metadata-service
 
+  # ochami may need to be built from a branch or tag, or it may simply
+  # be installed as a release RPM. The 'ochami' section determines what
+  # version to use (if specified) and whether it should be built (in
+  # which case it will be cloned from github) or downloaded as a release
+  # RPM from github. For an RPM install, 'version' is whatever version
+  # string goes with the RPM version to install (if null or empty the
+  # 'latest' RPM will be installed). For a build install, 'version' is
+  # the branch, tag, digest, or other reference to use when cloning
+  # and building the Git repo. If 'version' is unspecified or empty, 'main'
+  # will be used. The 'build' flag indicates whether or not to build
+  # from the repo, and the 'url' specifies the URL of the github repo to
+  # be cloned for building.
+  ochami:
+    version: latest
+    build: false
+    url: "https://github.com/openchami/ochami.git"
+
 # The 'nodes' section provides information about the managed nodes to be
 # created / managed by OpenCHAMI. It is used in the 'host' deployment
 # mode to help configure the VMs that are created locally as managed
