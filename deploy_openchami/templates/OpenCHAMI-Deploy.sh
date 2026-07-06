@@ -140,6 +140,13 @@ function merge_openchami_env() {
     fi
 }
 
+# Make sure that the 'ochami' command is installed and has a
+# known location... We need that location for 'sudo ochami ...'
+# commands.
+OCHAMI_PATH="$(command -v ochami)" || true
+[ -n "${OCHAMI_PATH}" ] || \
+    fail "the 'ochami' command does not appear to be installed, try running 'deploy_openchami -p' to prepare the host"
+
 {%- if deployment_mode == 'cluster' %}
 
 # In cluster mode, if we are returning to a cluster that has already
@@ -247,6 +254,9 @@ echo "${NODE_IP} ${NODE_FQDN} {{ node.hostname }} ${NID_FQDN} ${NID}" | \
 {%- endfor %}
 {%- endif %}
 
+info "shutting down any currently running instance of OpenCHAMI"
+cleanup_service openchami.target
+
 # Reload systemd to pick up the minio and registry containers and then
 # start those services
 info "Restarting systemd and starting minio and registry services"
@@ -263,10 +273,6 @@ info "set management net IF in 'coredhcp.yaml'"
 sudo sed -i \
     -e "s/::MGMT_NET_HEAD_IFNAME::/${MGMT_NET_HEAD_IFNAME}/g" \
     /etc/openchami/configs/coredhcp.yaml
-
-# Shut down and clean up after any pre-existing OpenCHAMI that might
-# be running
-cleanup_service openchami.target
 
 # Also remove any SMD or BSS data after
 # giving the pods a chance to stop
@@ -303,28 +309,11 @@ merge_openchami_env
 info "Starting OpenCHAMI"
 sudo systemctl start openchami.target
 
-{%- if openchami_config.ochami.build %}
-info "retrieving OpenCHAMI CLI (ochami) soure repo"
-sudo rm -rf "${DEPLOY_DIR}/ochami"
-git clone "{{ openchami_config.ochami.url }}" "${DEPLOY_DIR}/ochami"
-OCHAMI_VERSION="{{ openchami_config.ochami.version }}"
-info "building version '${OCHAMI_VERSION}' of 'ochami'"
-cd "${DEPLOY_DIR}/ochami"
-git checkout "${OCHAMI_VERSION}"
-sudo make install
-{%- else %}
-info "retrieving OpenCHAMI CLI (ochami) RPM"
-OCHAMI_CLI_VERSION="{{ openchami_config.ochami.version }}"
-latest_release_url=$(curl -s https://api.github.com/repos/OpenCHAMI/ochami/releases/${OCHAMI_CLI_VERSION} | jq -r ".assets[] | select(.name | endswith(\"$(derive_architecture).rpm\")) | .browser_download_url")
-curl -L "${latest_release_url}" -o ochami.rpm
-info "Installing OpenCHAMI CLI (ochami) RPM"
-sudo dnf install -y ./ochami.rpm
-{%- endif %}
-
 # Configure the OpenCHAMI CLI client
 info "Configuring OpenCHAMI CLI (ochami) Client"
 sudo rm -f /etc/ochami/config.yaml
-echo y | sudo ochami config cluster set --system --default "${CLUSTER_NAME}" \
+echo y | sudo "${OCHAMI_PATH}" config cluster set \
+              --system --default "${CLUSTER_NAME}" \
               cluster.uri "https://${MANAGEMENT_HEADNODE_FQDN}:8443" \
     || fail "failed to configure OpenCHAMI CLI"
 
@@ -437,7 +426,7 @@ info "Install boot configuration"
 ACTIVE_BOOT_CONFIG="$(basename "{{ images.builders[images.deployment_targets['compute']].metadata.boot_param_filename }}" .yaml).json"
 
 {%- if openchami_config.use_boot_service %}
-sudo ochami config --system cluster set demo cluster.boot-service.uri /boot-service
+sudo "${OCHAMI_PATH}" config --system cluster set demo cluster.boot-service.uri /boot-service
 ochami boot config add -d @"${DEPLOY_DIR}/boot/${ACTIVE_BOOT_CONFIG}"
 {%- else %}
 ochami bss boot params set -d @"${DEPLOY_DIR}/boot/${ACTIVE_BOOT_CONFIG}"

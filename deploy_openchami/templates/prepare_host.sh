@@ -6,6 +6,50 @@
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" > /dev/null && pwd )"
 source "${SCRIPT_DIR}/prep_setup.sh"
 
+function install_ochami() {
+    local ochami_version="{{ openchami_config.ochami.version }}"
+{%- if openchami_config.ochami.build %}
+    local ochami_url="{{ openchami_config.ochami.url }}"
+    info "retrieving OpenCHAMI CLI (ochami) soure repo: '${ochami_url}'"
+    sudo rm -rf "${DEPLOY_DIR}/ochami"
+    sudo su - "${DEPLOY_USER}" -c \
+         "git config --global --add safe.directory '${DEPLOY_DIR}/ochami'"
+    git clone "${ochami_url}" "${DEPLOY_DIR}/ochami"
+    info "building version '${ochami_version}' of 'ochami'"
+    cd "${DEPLOY_DIR}/ochami"
+    git checkout "${ochami_version}"
+    sudo make install
+{%- else %}
+    info "retrieving OpenCHAMI CLI (ochami) RPM"
+    local latest_release_url=$(curl -s https://api.github.com/repos/OpenCHAMI/ochami/releases/${ochami_version} | jq -r ".assets[] | select(.name | endswith(\"$(derive_architecture).rpm\")) | .browser_download_url")
+    curl -L "${latest_release_url}" -o ochami.rpm
+    info "Installing OpenCHAMI CLI (ochami) RPM"
+    sudo dnf install -y ./ochami.rpm
+{%- endif %}
+}
+
+function install_openchami() {
+    local openchami_url="{{ openchami_config.release.url }}"
+    local release_version="{{ openchami_config.release.version }}"
+    info "retrieving OpenCHAMI Release source repo: '${openchami_url}'"
+    sudo rm -rf "${DEPLOY_DIR}/openchami_release"
+    sudo su - "${DEPLOY_USER}" -c \
+         "git config --global --add safe.directory '${DEPLOY_DIR}/ochami'"
+    git clone "${openchami_url}" "${DEPLOY_DIR}/openchami_release"
+    info "building version '${release_version}' of OpenCHAMI Release"
+    cd "${DEPLOY_DIR}/openchami_release"
+    git checkout "${release_version}"
+    make
+    local rpm="$(ls openchami-*.noarch.rpm)"
+    # Install the RPM. First, Remove openchami if it is currently
+    # installed, ignore failure
+    info "removing any previous OpenCHAMI instance"
+    sudo dnf remove -y --noautoremove openchami || true
+    # Now install it...
+    info "installing latest OpenCHAMI: '${rpm}'"
+    sudo dnf install -y "${rpm}"
+}
+
 {%- if openchami_config.ochami.build %}
 # Figure out the newest stable release of golang so we can install that.
 # This will be needed to build 'ochami'.
@@ -34,6 +78,8 @@ PACKAGES="\
         openssl \
         nfs-utils \
         s3cmd \
+        make\
+        rpmdevtools\
 {%- if openchami_config.ochami.build %}
         "${GOLANG}" \
         scdoc \
@@ -79,3 +125,7 @@ fi
 info "giving user '${DEPLOY_USER}' passwordless sudo access"
 sed -i -e "/[[:space:]]*${DEPLOY_USER}/d" /etc/sudoers
 echo "${DEPLOY_USER} ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers
+
+# Install OpenCHAMI Release package and the OpenCHAMI CLI (ochami).
+install_openchami
+install_ochami

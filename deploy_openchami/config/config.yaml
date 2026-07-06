@@ -119,8 +119,6 @@ manifest:
       mode: "644"
       mkdir: true
     coredhcp:
-      annotations:
-        - host-prep-support
       template_name: coredhcp.yaml
       target: /etc/openchami/configs/coredhcp.yaml
       mode: "644"
@@ -349,6 +347,12 @@ openchami_config:
     version: latest
     build: false
     url: "https://github.com/openchami/ochami.git"
+  # The OpenCHAMI Release repository needs to be built and installed
+  # as part of deployment. The URL to the repository and the version
+  # (branch, tag, digest or other reference) is specified here.
+  release:
+    version: main
+    url: "https://github.com/openchami/release.git"
 
 # The 'nodes' section provides information about the managed nodes to be
 # created / managed by OpenCHAMI. It is used in the 'host' deployment
