@@ -295,7 +295,7 @@ openchami_config:
   # plug-in parameters are named. The `coredhcp_named_parameters` flag tells
   # the deployment tool to use named parameters if it is true and positional
   # parameters if it is false when templating this configuration.
-  coredhcp_named_parameters: false
+  coredhcp_named_parameters: true
 
   # The bootscript URI was originally a base URI not the full path and
   # it was put in `ipxe_base_uri` in the coredhcp configuration. This
@@ -321,7 +321,7 @@ openchami_config:
   # is using the 'boot-service' boot configuration server instead of
   # BSS. This changes the way the boot configuration is structured and
   # used during deployment.
-  use_boot_service: false
+  use_boot_service: true
 
   # The metadata server historically had a bug that prevented it from
   # presenting embedded Jinja templating as part of the cloud-init
@@ -346,7 +346,7 @@ openchami_config:
   # and a newer 'metadata-service' setting. This identifies where the
   # boot time metadata comes from when running cloud-init on the managed
   # nodes.
-  metadata_service: cloud-init
+  metadata_service: metadata-service
 
   # ochami may need to be built from a branch or tag, or it may simply
   # be installed as a release RPM. The 'ochami' section determines what
