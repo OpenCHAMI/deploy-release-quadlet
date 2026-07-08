@@ -31,6 +31,15 @@ function info() {
     echo "INFO: ${message}" >&2
 }
 
+function derive_architecture() {
+    local uname_arch="$(uname -m)"
+    case "${uname_arch}" in
+        arm64|aarch64) echo "arm64";;
+        amd64|x86_64) echo "amd64";;
+        *) fail "unknown platform architecture '${uname_arch}'";;
+    esac
+}
+
 function discovery_version() {
     # The version of SMD changed how ochami needs to feed it manually
     # discovered node data at 2.19. We need an extra option to address

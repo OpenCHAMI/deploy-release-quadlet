@@ -347,6 +347,7 @@ openchami_config:
     version: latest
     build: false
     url: "https://github.com/openchami/ochami.git"
+
   # The OpenCHAMI Release repository needs to be built and installed
   # as part of deployment. The URL to the repository and the version
   # (branch, tag, digest or other reference) is specified here.

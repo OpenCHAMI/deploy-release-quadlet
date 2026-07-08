@@ -11,20 +11,20 @@ function install_ochami() {
 {%- if openchami_config.ochami.build %}
     local ochami_url="{{ openchami_config.ochami.url }}"
     info "retrieving OpenCHAMI CLI (ochami) soure repo: '${ochami_url}'"
-    sudo rm -rf "${DEPLOY_DIR}/ochami"
-    sudo su - "${DEPLOY_USER}" -c \
+    rm -rf "${DEPLOY_DIR}/ochami"
+    su - "${DEPLOY_USER}" -c \
          "git config --global --add safe.directory '${DEPLOY_DIR}/ochami'"
     git clone "${ochami_url}" "${DEPLOY_DIR}/ochami"
     info "building version '${ochami_version}' of 'ochami'"
     cd "${DEPLOY_DIR}/ochami"
     git checkout "${ochami_version}"
-    sudo make install
+    make install
 {%- else %}
     info "retrieving OpenCHAMI CLI (ochami) RPM"
     local latest_release_url=$(curl -s https://api.github.com/repos/OpenCHAMI/ochami/releases/${ochami_version} | jq -r ".assets[] | select(.name | endswith(\"$(derive_architecture).rpm\")) | .browser_download_url")
     curl -L "${latest_release_url}" -o ochami.rpm
     info "Installing OpenCHAMI CLI (ochami) RPM"
-    sudo dnf install -y ./ochami.rpm
+    dnf install -y ./ochami.rpm
 {%- endif %}
 }
 
@@ -32,8 +32,8 @@ function install_openchami() {
     local openchami_url="{{ openchami_config.release.url }}"
     local release_version="{{ openchami_config.release.version }}"
     info "retrieving OpenCHAMI Release source repo: '${openchami_url}'"
-    sudo rm -rf "${DEPLOY_DIR}/openchami_release"
-    sudo su - "${DEPLOY_USER}" -c \
+    rm -rf "${DEPLOY_DIR}/openchami_release"
+    su - "${DEPLOY_USER}" -c \
          "git config --global --add safe.directory '${DEPLOY_DIR}/ochami'"
     git clone "${openchami_url}" "${DEPLOY_DIR}/openchami_release"
     info "building version '${release_version}' of OpenCHAMI Release"
@@ -44,17 +44,11 @@ function install_openchami() {
     # Install the RPM. First, Remove openchami if it is currently
     # installed, ignore failure
     info "removing any previous OpenCHAMI instance"
-    sudo dnf remove -y --noautoremove openchami || true
+    dnf remove -y --noautoremove openchami || true
     # Now install it...
     info "installing latest OpenCHAMI: '${rpm}'"
-    sudo dnf install -y "${rpm}"
+    dnf install -y "${rpm}"
 }
-
-{%- if openchami_config.ochami.build %}
-# Figure out the newest stable release of golang so we can install that.
-# This will be needed to build 'ochami'.
-GOLANG="golang-$(curl -s https://go.dev/VERSION\?m\=text | head -1 | sed -e 's/^go//')"
-{%- endif %}
 
 info "preparing platform - install required packages"
 PRE_INSTALL_PACKAGES="\
@@ -81,7 +75,6 @@ PACKAGES="\
         make\
         rpmdevtools\
 {%- if openchami_config.ochami.build %}
-        "${GOLANG}" \
         scdoc \
 {%- endif %}
 {%- for package in hosting_config.extra_packages.main %}
@@ -99,6 +92,23 @@ dnf -y install ${PACKAGES}  # list of packages, should not be quoted
 systemctl enable --now libvirtd
 {%- endif %}
 
+{%- if openchami_config.ochami.build %}
+# Go is needed to build 'ochami' and should be at the latest stable
+# release version to avoid problems.  Uninstall any version of golang
+# that might currently be part of the distribution or might have been
+# installed by a prior deployment.
+dnf remove -y golang || true
+rm -rf /usr/local/go
+rm -f /usr/bin/go
+# Figure out the newest stable release of golang so we can install that.
+GOLANG_VERSION="$(curl -s "https://go.dev/VERSION?m=text" | head -1)"
+GOLANG_ARCH="$(derive_architecture)"
+# Retrieve the tarball for the latest version of golang
+curl -s -o "${DEPLOY_DIR}/golang.tgz" \
+     "https://dl.google.com/go/${GOLANG_VERSION}.linux-${GOLANG_ARCH}.tar.gz"
+(cd /usr/local; tar xzf "${DEPLOY_DIR}/golang.tgz")
+ln -s /usr/local/go/bin/go /usr/bin/go
+{%- endif %}
 info "preparing platform - create the deployment user '${DEPLOY_USER}'"
 if ! getent group "${DEPLOY_GROUP}"; then
     info "creating primary group '{{ group }}' for '${DEPLOY_USER}'"
