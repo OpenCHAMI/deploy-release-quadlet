@@ -42,7 +42,7 @@ S3_PUBLIC_BUCKETS=(
 )
 
 function cleanup_service() {
-    local service="${1}"; shift || fail "no service specified"
+    local service="${1}"; shift || { fail "no service specified"; die; }
     local dir="${1}"; shift || dir=""
     info "cleaning up service '${service}'"
     if sudo systemctl status --no-pager --full "${service}"; then
@@ -56,8 +56,8 @@ function cleanup_service() {
 }
 
 function ssh_to_compute_node() {
-    local hostname="${1}"; shift || fail "no hostname specified"
-    local user="${1}"; shift || fail "no deployment username provided"
+    local hostname="${1}"; shift || { fail "no hostname specified"; die; }
+    local user="${1}"; shift || { fail "no deployment username provided"; die; }
     local cmd="${1}"; shift || cmd="true"
     local retries="${1}"; shift || retries=60
     local check="-o StrictHostKeyChecking=no"
@@ -145,7 +145,7 @@ function merge_openchami_env() {
 # commands.
 OCHAMI_PATH="$(command -v ochami)" || true
 [ -n "${OCHAMI_PATH}" ] || \
-    fail "the 'ochami' command does not appear to be installed, try running 'deploy_openchami -p' to prepare the host"
+    { fail "the 'ochami' command does not appear to be installed, try running 'deploy_openchami -p' to prepare the host"; exit 1; }
 
 {%- if deployment_mode == 'cluster' %}
 
@@ -297,7 +297,7 @@ for retry in {1..10}; do
     break
 done
 if [ "${retry}" -eq 10 ]; then
-    fail "timed out waiting to clear the SMD and BSS data"
+    { fail "timed out waiting to clear the SMD and BSS data"; exit 1; }
 fi
 
 # Create a version of /etc/openchami/configs/openchami.env for the
@@ -315,7 +315,7 @@ sudo rm -f /etc/ochami/config.yaml
 echo y | sudo "${OCHAMI_PATH}" config cluster set \
               --system --default "${CLUSTER_NAME}" \
               cluster.uri "https://${MANAGEMENT_HEADNODE_FQDN}:8443" \
-    || fail "failed to configure OpenCHAMI CLI"
+    || { fail "failed to configure OpenCHAMI CLI"; exit 1; }
 
 # Copy the application data files into their respective places so we are
 # ready to build and boot compute nodes.
@@ -336,7 +336,7 @@ for i in {1..10}; do
     fi
     sleep 10
 done
-[[ "${DEMO_ACCESS_TOKEN}" != "" ]] || fail "cannot get openchami access token"
+[[ "${DEMO_ACCESS_TOKEN}" != "" ]] || { fail "cannot get openchami access token"; exit 1; }
 
 # Wait for SMD to be up and running. This can sometimes take a little
 # while. If it takes more than 100 seconds, something is probably
@@ -351,7 +351,7 @@ for i in {0..9}; do
     sleep 10
 done
 if ! ${smd_running}; then
-    fail "timeout waiting for SMD to start, openChami is not fully available"
+    { fail "timeout waiting for SMD to start, openChami is not fully available"; exit 1; }
 fi
 
 # Run the static node discovery
@@ -387,7 +387,7 @@ done
 # coresmd-coredns, which should be running properly at this
 # point. Make sure it is and switch over to using it.
 systemctl is-active --quiet coresmd-coredns.service || \
-    fail "coresmd-coredns is not active, ivestigate why not and try again"
+    { fail "coresmd-coredns is not active, ivestigate why not and try again"; exit 1; }
 
 # Switch to coresmd-coredns as the nameserver
 info "Switching to the cluster internal DNS nameserver"
@@ -395,7 +395,7 @@ switch_dns "${MANAGEMENT_HEADNODE_IP}" "${CLUSTER_DOMAIN}"
 {%- endif %}
 
 # Refresh ochami token after the image builds in case it expired
-get-ochami-token || fail "unable to refresh access token"
+get-ochami-token || { fail "unable to refresh access token"; exit 1; }
 
 # Create the boot configuration for the Compute node Debug image
 cd "${DEPLOY_DIR}/boot"

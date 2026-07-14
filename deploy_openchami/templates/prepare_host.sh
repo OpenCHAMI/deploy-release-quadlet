@@ -45,6 +45,8 @@ function install_openchami() {
     # installed, ignore failure
     info "removing any previous OpenCHAMI instance"
     dnf remove -y --noautoremove openchami || true
+    # Also remove some cruft it leaves around
+    rm -rf /etc/openchami
     # Now install it...
     info "installing latest OpenCHAMI: '${rpm}'"
     dnf install -y "${rpm}"

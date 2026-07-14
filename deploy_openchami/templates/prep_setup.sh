@@ -8,7 +8,10 @@
 # sets up the user 'rocky' with that before chaining here.
 
 # Common setup for the prepare node scripts
-set -o errexit -o errtrace
+
+# Special error handling only for scripts, for interactive shells, if
+# they ever source this code, error handling will be normal.
+[[ "${-}" == *i* ]] || set -o errexit -o errtrace
 function error_handler() {
     local filename="${1}"; shift
     local lineno="${1}"; shift
@@ -18,13 +21,13 @@ function error_handler() {
     echo "exiting on error [${exitval}] from ${filename}:${lineno}" >&2
     exit ${exitval}
 }
-trap 'error_handler "${BASH_SOURCE[0]}" "${LINENO}" "${?}"' ERR
+[[ "${-}" == *i* ]] || trap 'error_handler "${BASH_SOURCE[0]}" "${LINENO}" "${?}"' ERR
 
 function fail() {
     local message="${*:-"failing for no specified reason"}"
     echo "${BASH_SOURCE[1]}:${BASH_LINENO[0]}:[${FUNCNAME[1]}]: ${message}" >&2
-    return 1
 }
+alias die="return 1"
 
 function info() {
     local message="${*:-"failing for no specified reason"}"
@@ -36,7 +39,7 @@ function derive_architecture() {
     case "${uname_arch}" in
         arm64|aarch64) echo "arm64";;
         amd64|x86_64) echo "amd64";;
-        *) fail "unknown platform architecture '${uname_arch}'";;
+        *) { fail "unknown platform architecture '${uname_arch}'"; die; };;
     esac
 }
 
@@ -81,7 +84,7 @@ EOF
 }
 
 function find_if_by_addr() {
-    addr=${1}; shift || fail "no ip addr supplied when looking up ip interface"
+    addr=${1}; shift || { fail "no ip addr supplied when looking up ip interface"; die; }
     ip --json a | \
         jq -r "\
           .[] | .ifname as \$ifname | \
@@ -100,8 +103,8 @@ function switch_dns() {
     #
     # First, get the list of connections (interfaces) with nameservers
     # assigned to them...
-    local nameserver="${1}"; shift || fail "no nameserver specified to switch to"
-    local domain="${1}"; shift || fail "no search domain specified"
+    local nameserver="${1}"; shift || { fail "no nameserver specified to switch to"; die; }
+    local domain="${1}"; shift || { fail "no search domain specified"; die; }
     local connection=""
     local connections="$(
         for connection in $(nmcli --terse --fields NAME connection show); do
@@ -120,7 +123,7 @@ function switch_dns() {
     # Now find the first interface (nmcli connection) that routes to
     # the desired name server IP address.
     connection="$(ip --json route get "${nameserver}" | jq -r '.[0] | .dev')"
-    [[ "${connection}" != "" ]] || fail "no interface found that can reach the DNS server '${nameserver}'"
+    [[ "${connection}" != "" ]] || { fail "no interface found that can reach the DNS server '${nameserver}'"; die; }
 
     # Set the nameserver on the connection and put the cluster domain
     # in the search on the same connection
