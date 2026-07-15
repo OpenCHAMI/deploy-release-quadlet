@@ -295,7 +295,7 @@ openchami_config:
   # plug-in parameters are named. The `coredhcp_named_parameters` flag tells
   # the deployment tool to use named parameters if it is true and positional
   # parameters if it is false when templating this configuration.
-  coredhcp_named_parameters: true
+  coredhcp_named_parameters: false
 
   # The 'get-ochami-token' command provides by the deployment tool
   # allows a user to obtain an OAUTH token for use with SMD through
@@ -310,14 +310,14 @@ openchami_config:
   # is using the 'boot-service' boot configuration server instead of
   # BSS. This changes the way the boot configuration is structured and
   # used during deployment.
-  use_boot_service: true
+  use_boot_service: false
 
   # The metadata server historically had a bug that prevented it from
   # presenting embedded Jinja templating as part of the cloud-init
   # metadata. The `cloud_init_templating_disabled` flag worked around
   # this by forcing the needed templating to be explicitly filled out
   # instead of templated.
-  cloud_init_templating_disabled: true
+  cloud_init_templating_disabled: false
 
   # S3 has two ports, the API port where API operations are handled and
   # the Web-UI (console) port.
@@ -335,7 +335,7 @@ openchami_config:
   # and a newer 'metadata-service' setting. This identifies where the
   # boot time metadata comes from when running cloud-init on the managed
   # nodes.
-  metadata_service: metadata-service
+  metadata_service: cloud-init
 
   # ochami may need to be built from a branch or tag, or it may simply
   # be installed as a release RPM. The 'ochami' section determines what
