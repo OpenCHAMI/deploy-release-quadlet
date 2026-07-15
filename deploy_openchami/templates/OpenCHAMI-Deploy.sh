@@ -472,12 +472,19 @@ spec:
     - name: dict
       settings: [no_replace, recurse_list]
     users:
+{%- if openchami_config.cloud_init_templating_disabled %}
       - name: testuser
         ssh_authorized_keys:
         - "$(cat ~/.ssh/id_rsa.pub)"
       - name: root
         ssh_authorized_keys:
         - "$(cat ~/.ssh/id_rsa.pub)"
+{%- else %}
+        - name: testuser
+          ssh_authorized_keys: {{ "{{ ds.meta_data.instance_data.v1.public_keys }}" }}
+        - name: root
+          ssh_authorized_keys: {{ "{{ ds.meta_data.instance_data.v1.public_keys }}" }}
+{%- endif %}
     disable_root: false
   metadata: {}
 EOF
@@ -517,10 +524,19 @@ for group in $(node_groups); do
       - name: dict
         settings: [no_replace, recurse_list]
       users:
+{%- if openchami_config.cloud_init_templating_disabled %}
+      - name: testuser
+        ssh_authorized_keys:
+        - "$(cat ~/.ssh/id_rsa.pub)"
+      - name: root
+        ssh_authorized_keys:
+        - "$(cat ~/.ssh/id_rsa.pub)"
+{%- else %}
         - name: testuser
           ssh_authorized_keys: {{ "{{ ds.meta_data.instance_data.v1.public_keys }}" }}
         - name: root
           ssh_authorized_keys: {{ "{{ ds.meta_data.instance_data.v1.public_keys }}" }}
+{%- endif %}
       disable_root: false
 EOF
     ochami cloud-init group set -f yaml \
