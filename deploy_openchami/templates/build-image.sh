@@ -6,28 +6,18 @@ function _bi_fail() {
     local func=${FUNCNAME[1]:-"unknown-function"} # Calling function
     local message="${*:-"failing for no specified reason"}"
     echo "${func}: ${message}" >&2
-    return 1
 }
+alias die="return 1"
 
 function yaml_to_json() {
     python3 -c 'import yaml, json, sys; json.dump(yaml.safe_load(sys.stdin), sys.stdout, indent=2)'
 }
 
-function derive_architecture() {
-    local uname_arch="$(uname -m)"
-    case "${uname_arch}" in
-        arm64|aarch64) echo "arm64";;
-        amd64|x86_64) echo "amd64";;
-        *) fail "unknown platform architecture '${uname_arch}'";;
-    esac
-}
-
 function build-image() {
-    set -e
-    local config="${1}"; shift || _bi_fail "image config file not specified"
+    local config="${1}"; shift || { _bi_fail "image config file not specified"; die; }
     # Build with the specified builder. Default to using the RH9 builder
     local builder="${1:-"ghcr.io/openchami/image-build-el9:latest"}"
-    [[ -f "${config}" ]] || _bi_fail "${config} not found"
+    [[ -f "${config}" ]] || { _bi_fail "${config} not found"; die; }
     podman run \
            --network=host \
            --rm \
@@ -39,37 +29,37 @@ function build-image() {
            "${builder}" \
            image-build \
            --config config.yaml \
-           --log-level DEBUG || _bi_fail "cannot build image defined in ${config}"
+           --log-level DEBUG || { _bi_fail "can't build image found in ${config}"; die; }
 }
 
 function build-image-rh9() {
-    local config="${1}"; shift || _bi_fail "image config file not specified"
+    local config="${1}"; shift || { _bi_fail "image config file not specified"; die; }
     build-image "${config}"
 }
 
 function build-image-rh8() {
-    local config="${1}"; shift || _bi_fail "image config file not specified"
+    local config="${1}"; shift || { _bi_fail "image config file not specified"; die; }
     local builder="ghcr.io/openchami/image-build:v0.1.0"
     build-image "${config}" "${builder}"
 }
 
 function generate-boot-config() {
-    local image_subpath="${1}"; shift || _bi_fail "image subpath (example 'compute/debug') not provided as first argument"
-    local headnode_ip="${1}"; shift || _bi_fail "management head-node IP address not provided as second argument"
+    local image_subpath="${1}"; shift || { _bi_fail "image subpath (example 'compute/debug') not provided as first argument"; die; }
+    local headnode_ip="${1}"; shift || { _bi_fail "management head-node IP address not provided as second argument"; die; }
     local macs="$(for mac in "$@"; do echo "${mac}"; done)"
     local s3_port="{{ openchami_config.s3.api_port }}"
-    [[ "${macs}" != "" ]] || _bi_fail "no target node MAC addresses provided"
+    [[ "${macs}" != "" ]] || { _bi_fail "no target node MAC addresses provided"; die; }
     cd /opt/workdir/boot
     local uris="$(s3cmd ls -Hr s3://boot-images | grep "${image_subpath}" | \
                         awk '{print $4}' | \
                         sed "s-s3://-http://${headnode_ip}:${s3_port}/-" | \
                         xargs)"
     local uri_img="$(echo "${uris}" | cut -d' ' -f1)"
-    [[ "${uri_img}" != "" ]] || _bi_fail "no disk image found that matches '${image_subpath}'"
+    [[ "${uri_img}" != "" ]] || { _bi_fail "no disk image found that matches '${image_subpath}'"; die; }
     local uri_initramfs="$(echo "${uris}" | cut -d' ' -f2)"
-    [[ "${uri_initramfs}" != "" ]] || _bi_fail "no initrd image found that matches '${image_subpath}'"
+    [[ "${uri_initramfs}" != "" ]] || { _bi_fail "no initrd image found that matches '${image_subpath}'"; die; }
     local uri_kernel="$(echo "${uris}" | cut -d' ' -f3)"
-    [[ "${uri_kernel}" != "" ]] || _bi_fail "no kernel image found that matches '${image_subpath}'"
+    [[ "${uri_kernel}" != "" ]] || { _bi_fail "no kernel image found that matches '${image_subpath}'"; die; }
 {%- if openchami_config.metadata_service == "metadata-service" %}
     local cloud_init="cloud-init=enabled ds=nocloud-net;s=http://${headnode_ip}:8081/metadata-service"
 {%- elif openchami_config.metadata_service == "cloud-init" %}
@@ -97,21 +87,21 @@ generate-boot-config-json() {
 }
 
 function __bmc_user() {
-    local name="${1}"; shift || _bi_fail "BMC name not provided for __bmc_user"
+    local name="${1}"; shift || { _bi_fail "BMC name not provided for __bmc_user"; die; }
     sudo cat /etc/vtds/bmc_info.json | \
         jq -r ".[] | select(.name == \"${name}\") | .redfish_username"
 }
 
 function __bmc_password() {
-    local name="${1}"; shift || _bi_fail "BMC name not provided for __bmc_user"
+    local name="${1}"; shift || { _bi_fail "BMC name not provided for __bmc_user"; die; }
     sudo cat /etc/vtds/bmc_info.json | \
         jq -r ".[] | select(.name == \"${name}\") | .redfish_password"
 }
 
 function __node_reset() {
-    local reset_type="${1}"; shift || _bi_fail "no reset type supplied"
-    local node_name="${1}"; shift || _bi_fail "no node name provided"
-    local bmc_name="${1}"; shift || _bi_fail "no BMC name provided"
+    local reset_type="${1}"; shift || { _bi_fail "no reset type supplied"; die; }
+    local node_name="${1}"; shift || { _bi_fail "no node name provided"; die; }
+    local bmc_name="${1}"; shift || { _bi_fail "no BMC name provided"; die; }
     local bmc_url="https://${bmc_name}/redfish/v1/Systems"
     local node_action="${node_name}/Actions/ComputerSystem.Reset"
 

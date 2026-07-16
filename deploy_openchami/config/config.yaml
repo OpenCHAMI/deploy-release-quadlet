@@ -119,8 +119,6 @@ manifest:
       mode: "644"
       mkdir: true
     coredhcp:
-      annotations:
-        - host-prep-support
       template_name: coredhcp.yaml
       target: /etc/openchami/configs/coredhcp.yaml
       mode: "644"
@@ -287,6 +285,9 @@ openchami_config:
     # http://tokensmith:8080 which is not what is installed by the
     # openchami package. Change that here.
     SMD_AUTH_ISSUER: http://tokensmith:8080
+    # The issuer URL that tokensmith uses to sign its tokens. This needs
+    # to match SMD_AUTH_ISSUER
+    TOKENSMITH_ISSUER: http://tokensmith:8080
 
 
   # The coredhcp configuration has an old form in which all of the
@@ -296,14 +297,13 @@ openchami_config:
   # parameters if it is false when templating this configuration.
   coredhcp_named_parameters: false
 
-  # The 'get-ochami-token' command provided by the deployment tool
+  # The 'get-ochami-token' command provides by the deployment tool
   # allows a user to obtain an OAUTH token for use with SMD through
-  # ochami. At least temporarily, there is no working 'gen_access_token'
-  # command available in OpenCHAMI, but there might be again, or you
-  # might be deploying an older version of OpenCHAMI where there was
-  # one. The 'gen_access_token_works' flag tells the deployment tool
-  # whether to use 'gen_access_token' as the basis of 'get-ochami-token'
-  # or supply explicit code for that purpose.
+  # ochami. Historically, there was a time when that command was broken
+  # and had to be replaced with explicit code.  The
+  # 'gen_access_token_works' flag tells the deployment tool whether to
+  # use 'gen_access_token' as the basis of 'get-ochami-token' or supply
+  # explicit code for that purpose.
   gen_access_token_works: true
 
   # The 'use_boot_service' flag tells the deployment tool that OpenCHAMI
@@ -311,6 +311,13 @@ openchami_config:
   # BSS. This changes the way the boot configuration is structured and
   # used during deployment.
   use_boot_service: false
+
+  # The metadata server historically had a bug that prevented it from
+  # presenting embedded Jinja templating as part of the cloud-init
+  # metadata. The `cloud_init_templating_disabled` flag worked around
+  # this by forcing the needed templating to be explicitly filled out
+  # instead of templated.
+  cloud_init_templating_disabled: false
 
   # S3 has two ports, the API port where API operations are handled and
   # the Web-UI (console) port.
@@ -329,6 +336,30 @@ openchami_config:
   # boot time metadata comes from when running cloud-init on the managed
   # nodes.
   metadata_service: cloud-init
+
+  # ochami may need to be built from a branch or tag, or it may simply
+  # be installed as a release RPM. The 'ochami' section determines what
+  # version to use (if specified) and whether it should be built (in
+  # which case it will be cloned from github) or downloaded as a release
+  # RPM from github. For an RPM install, 'version' is whatever version
+  # string goes with the RPM version to install (if null or empty the
+  # 'latest' RPM will be installed). For a build install, 'version' is
+  # the branch, tag, digest, or other reference to use when cloning
+  # and building the Git repo. If 'version' is unspecified or empty, 'main'
+  # will be used. The 'build' flag indicates whether or not to build
+  # from the repo, and the 'url' specifies the URL of the github repo to
+  # be cloned for building.
+  ochami:
+    version: latest
+    build: false
+    url: "https://github.com/openchami/ochami.git"
+
+  # The OpenCHAMI Release repository needs to be built and installed
+  # as part of deployment. The URL to the repository and the version
+  # (branch, tag, digest or other reference) is specified here.
+  release:
+    version: main
+    url: "https://github.com/openchami/release.git"
 
 # The 'nodes' section provides information about the managed nodes to be
 # created / managed by OpenCHAMI. It is used in the 'host' deployment

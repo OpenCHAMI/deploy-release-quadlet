@@ -42,7 +42,7 @@ S3_PUBLIC_BUCKETS=(
 )
 
 function cleanup_service() {
-    local service="${1}"; shift || fail "no service specified"
+    local service="${1}"; shift || { fail "no service specified"; die; }
     local dir="${1}"; shift || dir=""
     info "cleaning up service '${service}'"
     if sudo systemctl status --no-pager --full "${service}"; then
@@ -56,8 +56,8 @@ function cleanup_service() {
 }
 
 function ssh_to_compute_node() {
-    local hostname="${1}"; shift || fail "no hostname specified"
-    local user="${1}"; shift || fail "no deployment username provided"
+    local hostname="${1}"; shift || { fail "no hostname specified"; die; }
+    local user="${1}"; shift || { fail "no deployment username provided"; die; }
     local cmd="${1}"; shift || cmd="true"
     local retries="${1}"; shift || retries=60
     local check="-o StrictHostKeyChecking=no"
@@ -139,6 +139,13 @@ function merge_openchami_env() {
         sudo cp "${edited}" /etc/openchami/configs/openchami.env
     fi
 }
+
+# Make sure that the 'ochami' command is installed and has a
+# known location... We need that location for 'sudo ochami ...'
+# commands.
+OCHAMI_PATH="$(command -v ochami)" || true
+[ -n "${OCHAMI_PATH}" ] || \
+    { fail "the 'ochami' command does not appear to be installed, try running 'deploy_openchami -p' to prepare the host"; exit 1; }
 
 {%- if deployment_mode == 'cluster' %}
 
@@ -247,6 +254,9 @@ echo "${NODE_IP} ${NODE_FQDN} {{ node.hostname }} ${NID_FQDN} ${NID}" | \
 {%- endfor %}
 {%- endif %}
 
+info "shutting down any currently running instance of OpenCHAMI"
+cleanup_service openchami.target
+
 # Reload systemd to pick up the minio and registry containers and then
 # start those services
 info "Restarting systemd and starting minio and registry services"
@@ -263,10 +273,6 @@ info "set management net IF in 'coredhcp.yaml'"
 sudo sed -i \
     -e "s/::MGMT_NET_HEAD_IFNAME::/${MGMT_NET_HEAD_IFNAME}/g" \
     /etc/openchami/configs/coredhcp.yaml
-
-# Shut down and clean up after any pre-existing OpenCHAMI that might
-# be running
-cleanup_service openchami.target
 
 # Also remove any SMD or BSS data after
 # giving the pods a chance to stop
@@ -291,7 +297,7 @@ for retry in {1..10}; do
     break
 done
 if [ "${retry}" -eq 10 ]; then
-    fail "timed out waiting to clear the SMD and BSS data"
+    { fail "timed out waiting to clear the SMD and BSS data"; exit 1; }
 fi
 
 # Create a version of /etc/openchami/configs/openchami.env for the
@@ -303,19 +309,13 @@ merge_openchami_env
 info "Starting OpenCHAMI"
 sudo systemctl start openchami.target
 
-info "retrieving OpenCHAMI CLI (ochami) RPM"
-OCHAMI_CLI_VERSION="latest"
-latest_release_url=$(curl -s https://api.github.com/repos/OpenCHAMI/ochami/releases/${OCHAMI_CLI_VERSION} | jq -r ".assets[] | select(.name | endswith(\"$(derive_architecture).rpm\")) | .browser_download_url")
-curl -L "${latest_release_url}" -o ochami.rpm
-info "Installing OpenCHAMI CLI (ochami) RPM"
-sudo dnf install -y ./ochami.rpm
-
 # Configure the OpenCHAMI CLI client
 info "Configuring OpenCHAMI CLI (ochami) Client"
 sudo rm -f /etc/ochami/config.yaml
-echo y | sudo ochami config cluster set --system --default "${CLUSTER_NAME}" \
+echo y | sudo "${OCHAMI_PATH}" config cluster set \
+              --system --default "${CLUSTER_NAME}" \
               cluster.uri "https://${MANAGEMENT_HEADNODE_FQDN}:8443" \
-    || fail "failed to configure OpenCHAMI CLI"
+    || { fail "failed to configure OpenCHAMI CLI"; exit 1; }
 
 # Copy the application data files into their respective places so we are
 # ready to build and boot compute nodes.
@@ -336,7 +336,7 @@ for i in {1..10}; do
     fi
     sleep 10
 done
-[[ "${DEMO_ACCESS_TOKEN}" != "" ]] || fail "cannot get openchami access token"
+[[ "${DEMO_ACCESS_TOKEN}" != "" ]] || { fail "cannot get openchami access token"; exit 1; }
 
 # Wait for SMD to be up and running. This can sometimes take a little
 # while. If it takes more than 100 seconds, something is probably
@@ -351,7 +351,7 @@ for i in {0..9}; do
     sleep 10
 done
 if ! ${smd_running}; then
-    fail "timeout waiting for SMD to start, openChami is not fully available"
+    { fail "timeout waiting for SMD to start, openChami is not fully available"; exit 1; }
 fi
 
 # Run the static node discovery
@@ -387,7 +387,7 @@ done
 # coresmd-coredns, which should be running properly at this
 # point. Make sure it is and switch over to using it.
 systemctl is-active --quiet coresmd-coredns.service || \
-    fail "coresmd-coredns is not active, ivestigate why not and try again"
+    { fail "coresmd-coredns is not active, ivestigate why not and try again"; exit 1; }
 
 # Switch to coresmd-coredns as the nameserver
 info "Switching to the cluster internal DNS nameserver"
@@ -395,7 +395,7 @@ switch_dns "${MANAGEMENT_HEADNODE_IP}" "${CLUSTER_DOMAIN}"
 {%- endif %}
 
 # Refresh ochami token after the image builds in case it expired
-get-ochami-token || fail "unable to refresh access token"
+get-ochami-token || { fail "unable to refresh access token"; exit 1; }
 
 # Create the boot configuration for the Compute node Debug image
 cd "${DEPLOY_DIR}/boot"
@@ -406,6 +406,11 @@ for builder in "${IMAGE_BUILDERS[@]}"; do
       yaml_to_json < "${builder}" | jq -r '.options.s3_prefix' |
       sed -e 's:/[[:blank:]]*$::' \
     )"
+    # If there is no S3 prefix for this image builder it means that
+    # only the OCI image is stored, so don't try to get boot
+    # parameters for it.
+    [[ "${S3_PREFIX}" != "null" ]] || continue
+
     generate-boot-config-json \
         "${S3_PREFIX}" \
         "${MANAGEMENT_HEADNODE_IP}" \
@@ -421,7 +426,7 @@ info "Install boot configuration"
 ACTIVE_BOOT_CONFIG="$(basename "{{ images.builders[images.deployment_targets['compute']].metadata.boot_param_filename }}" .yaml).json"
 
 {%- if openchami_config.use_boot_service %}
-sudo ochami config --system cluster set demo cluster.boot-service.uri /boot-service
+sudo "${OCHAMI_PATH}" config --system cluster set demo cluster.boot-service.uri /boot-service
 ochami boot config add -d @"${DEPLOY_DIR}/boot/${ACTIVE_BOOT_CONFIG}"
 {%- else %}
 ochami bss boot params set -d @"${DEPLOY_DIR}/boot/${ACTIVE_BOOT_CONFIG}"
@@ -467,12 +472,19 @@ spec:
     - name: dict
       settings: [no_replace, recurse_list]
     users:
+{%- if openchami_config.cloud_init_templating_disabled %}
       - name: testuser
         ssh_authorized_keys:
         - "$(cat ~/.ssh/id_rsa.pub)"
       - name: root
         ssh_authorized_keys:
         - "$(cat ~/.ssh/id_rsa.pub)"
+{%- else %}
+        - name: testuser
+          ssh_authorized_keys: {{ "{{ ds.meta_data.instance_data.v1.public_keys }}" }}
+        - name: root
+          ssh_authorized_keys: {{ "{{ ds.meta_data.instance_data.v1.public_keys }}" }}
+{%- endif %}
     disable_root: false
   metadata: {}
 EOF
@@ -512,10 +524,19 @@ for group in $(node_groups); do
       - name: dict
         settings: [no_replace, recurse_list]
       users:
+{%- if openchami_config.cloud_init_templating_disabled %}
+      - name: testuser
+        ssh_authorized_keys:
+        - "$(cat ~/.ssh/id_rsa.pub)"
+      - name: root
+        ssh_authorized_keys:
+        - "$(cat ~/.ssh/id_rsa.pub)"
+{%- else %}
         - name: testuser
           ssh_authorized_keys: {{ "{{ ds.meta_data.instance_data.v1.public_keys }}" }}
         - name: root
           ssh_authorized_keys: {{ "{{ ds.meta_data.instance_data.v1.public_keys }}" }}
+{%- endif %}
       disable_root: false
 EOF
     ochami cloud-init group set -f yaml \

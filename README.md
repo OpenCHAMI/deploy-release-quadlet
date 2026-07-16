@@ -47,30 +47,6 @@ on the headnode.
 The user running the deployment tool must either be `root` or have
 `sudo` access on the headnode.
 
-The host system must have `openchami` installed on it either by means
-of downloading the release RPM and installing it or by means of
-obtaining the source code, building the RPM and installing it. To
-install from the release RPM, do the following:
-
-```
-# Identify the latest release RPM
-RELEASE_VERSION="latest"
-API_URL="https://api.github.com/repos/openchami/release/releases/${RELEASE_VERSION}"
-release_json=$(curl -s "$API_URL")
-rpm_url=$(echo "$release_json" | jq -r '.assets[] | select(.name | endswith(".rpm")) | .browser_download_url' | head -n 1)
-rpm_name=$(echo "$release_json" | jq -r '.assets[] | select(.name | endswith(".rpm")) | .name' | head -n 1)
-
-# Download the RPM
-curl -L -o "$rpm_name" "$rpm_url"
-
-# Install the RPM
-sudo dnf install -y ./"$rpm_name"
-```
-
-Installation from source is described in the
-[OpenCHAMI Release README](https://github.com/OpenCHAMI/release/blob/main/README.md#openchami-releases).
-
-
 ## Installing and Running the Deployment Tool
 
 The deployment tool works best when it is installed in a Python
@@ -93,8 +69,7 @@ To install the deployment tool use `git` to clone this repository (
 [https://github.com/hpe-erl/deploy-openchami-quadlet](https://github.com/hpe-erl/deploy-openchami-quadlet)
 ) and check out the version of the deployment tool you want. The
 version of the deployment tool you need depends on the version of
-OpenCHAMI you are deploying. For compatibility information see this
-[CompatibilityGuide](COMPATIBILITY.md).
+OpenCHAMI you are deploying.
 
 Once you have the correct version checked out, enter the root directory of the cloned repository and use
 
@@ -116,22 +91,43 @@ sudo ~/venv/bin/deploy_openchami ...
 ```
 
 Now you are ready to use the deployment tool. This is done in two
-stages. The first needs to be run only when you first start using a
-brand-new headnode. The second needs to be run each time you want to
-(re-)deploy OpenCHAMI on your headnode.
+stages. The first stage needs to be run when you first start on a
+brand-new headnode or if you change the version of OpenCHAMI or
+`ochami` you want to test. This stage installs packages needed by the
+installation process, creates a non-root administrative user (by
+default `rocky`), installs the configured version of [OpenCHAMI
+Release](https://github.com/openchami/release) and installs the
+configured version of [ochami](https://github.com/openchami/ochami).
+The second stage needs to be run each time you want to (re-)deploy
+OpenCHAMI on your headnode.
+
+Before starting, you should determine what version of OpenCHAMI
+release you want to deploy and place, at least that, into a
+configuration file in the directory where you plant to run your
+deployment. Here is a sample configuration that will deploy OpenCHAMI
+Release version `v0.1.6`:
+
+```
+openchami_config:
+  release:
+    version: v0.1.6
+```
+
+For the following examples, that is the content of the file
+`config.yaml`.
 
 1. Use the deployment tool to prepare the headnode for OpenCHAMI
 deployment:
 
 ```shell
-sudo ~/venv/bin/deploy_openchami -p
+sudo ~/venv/bin/deploy_openchami -p config.yaml
 ```
 
 2. Use the deployment tool to deploy OpenCHAMI and start a virtual
 compute node:
 
 ```shell
-sudo ~/venv/bin/deploy_openchami
+sudo ~/venv/bin/deploy_openchami config.yaml
 ```
 
 __NOTE: If your are running on an arm64 (aarch64) host, you will need
