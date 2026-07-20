@@ -1,0 +1,13 @@
+# SPDX-FileCopyrightText: (C) Copyright 2024-2026 OpenCHAMI a Series of LF Projects, LLC
+# SPDX-License-Identifier: MIT
+
+# Example configuration overlay
+#
+# This overlay converts the current 'latest' version of the
+# configuration into the configuration required to run versions
+# of OpenCHAMI Release from v0.1.4 to v0.1.6.
+openchami_config:
+  gen_access_token_works: true
+  coredhcp_named_parameters: false
+  use_boot_service: false
+  metadata_service: cloud-init
