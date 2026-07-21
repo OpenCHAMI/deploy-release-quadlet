@@ -22,9 +22,9 @@ server4:
         svc_base_uri=https://{{ hosting_config.net_head_hostname }}.{{
         hosting_config.net_head_domain }}:8443
 {%- if openchami_config.use_boot_service %}
-        ipxe_base_uri=http://{{ hosting_config.net_head_ip }}:8081/boot-service
+        ipxe_uri=http://{{ hosting_config.net_head_ip }}:8081/boot-service/bootscript
 {%- else %}
-        ipxe_base_uri=http://{{ hosting_config.net_head_ip }}:8081
+        ipxe_uri=http://{{ hosting_config.net_head_ip }}:8081/bss/bootscript
 {%- endif %}
         ca_cert=/root_ca/root_ca.crt
         cache_valid=30s
