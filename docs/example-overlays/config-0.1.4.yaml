@@ -11,3 +11,4 @@ openchami_config:
   coredhcp_named_parameters: false
   use_boot_service: false
   metadata_service: cloud-init
+  cloud_init_templating_disabled: false

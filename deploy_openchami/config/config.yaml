@@ -297,6 +297,17 @@ openchami_config:
   # parameters if it is false when templating this configuration.
   coredhcp_named_parameters: false
 
+  # The bootscript URI was originally a base URI not the full path and
+  # it was put in `ipxe_base_uri` in the coredhcp configuration. This
+  # changed with a newer version of coredhcp so that `ipxe_uri` is used
+  # instead and it is the full URI. The `use_ipxe_base_uri` setting
+  # should be false on newer versions of coredhcp and true for older
+  # versions.
+  #
+  # This only matters if coredhcp_named_parameters is true, so it is
+  # false and effectively unused for older release of OpenCHAMI Release.
+  use_ipxe_base_uri: false
+
   # The 'get-ochami-token' command provides by the deployment tool
   # allows a user to obtain an OAUTH token for use with SMD through
   # ochami. Historically, there was a time when that command was broken

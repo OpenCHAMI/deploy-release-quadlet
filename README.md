@@ -196,6 +196,9 @@ images:
           gpg: 'https://dl.fedoraproject.org/pub/epel/RPM-GPG-KEY-EPEL-9'
 ```
 
+A maintained version of the above configuration overlay is provided in
+[docs/example-overlays/config-aarch64.yaml](docs/example-overlays/config-aarch64.yaml).
+
 ### Example Overlay for Cluster Mode OpenCHAMI Deployment
 
 The following is an example configuration overlay for deploying
@@ -289,6 +292,9 @@ nodes:
     - name: compnet
       ip_addr: 10.2.1.35
 ```
+
+A maintained version of the above configuration overlay is provided in
+[docs/example-overlays/config-cluster-mode.yaml](docs/example-overlays/config-cluster-mode.yaml).
 
 ### Working with the Deployment Tool Configuration
 

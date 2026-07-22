@@ -473,20 +473,19 @@ spec:
       settings: [no_replace, recurse_list]
     users:
 {%- if openchami_config.cloud_init_templating_disabled %}
-      - name: testuser
-        ssh_authorized_keys:
-        - "$(cat ~/.ssh/id_rsa.pub)"
-      - name: root
-        ssh_authorized_keys:
-        - "$(cat ~/.ssh/id_rsa.pub)"
+    - name: testuser
+      ssh_authorized_keys:
+      - "$(cat ~/.ssh/id_rsa.pub)"
+    - name: root
+      ssh_authorized_keys:
+      - "$(cat ~/.ssh/id_rsa.pub)"
 {%- else %}
-        - name: testuser
-          ssh_authorized_keys: {{ "{{ ds.meta_data.instance_data.v1.public_keys }}" }}
-        - name: root
-          ssh_authorized_keys: {{ "{{ ds.meta_data.instance_data.v1.public_keys }}" }}
+      - name: testuser
+        ssh_authorized_keys: {{ "{{ ds.meta_data.instance_data.v1.public_keys }}" }}
+      - name: root
+        ssh_authorized_keys: {{ "{{ ds.meta_data.instance_data.v1.public_keys }}" }}
 {%- endif %}
     disable_root: false
-  metadata: {}
 EOF
     ochami metadata group add \
            -d "$(yaml_to_json < "${DEPLOY_DIR}/boot-metadata/md-group-${group}.yaml")"
