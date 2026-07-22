@@ -1,0 +1,109 @@
+# SPDX-FileCopyrightText: (C) Copyright 2024-2026 OpenCHAMI a Series of LF Projects, LLC
+# SPDX-License-Identifier: MIT
+
+# Example configuration overlay
+#
+# The following is an example configuration overlay for deploying
+# OpenCHAMI on a cluster with a head node and four compute nodes all
+# residing on a cluster network configured with the network interface
+# name 'compnet' on the head-node and with an IPv4 range of 10.2.1.0/24
+# and an external DNS server at 10.234.0.1. The cluster also containse a
+# single BMC that manages the four nodes and residing on a hardware
+# management network reachable from the head node in the IPv4 address
+# range 10.3.1.0/24. The BMC resides at 10.3.1.1. The MAC addresses of
+# the BMCs and compute nodes were collected from their respective nodes
+#and placed in this configuration..
+
+# NOTE: set the RedFish password in here to match the setting on the BMC
+#
+# NOTE: collect and fill out your own cluster's MAC addresses in the
+#       'nodes' and 'bmcs' sections.
+
+# Set the deployment mode to 'cluster' instead of 'host' so that no
+# VM will be created on the head node and the cluster will be set up
+# to use coresmd-coredns for DNS.
+deployment_mode: cluster
+
+# The 'bmcs' section describes each of the BMCs on the cluster.
+bmcs:
+  # An X-Name is used here because it shows the relationship between 
+  x2000c0s0b0:
+    blade_class: host-blade
+    blade_instance: 0
+    network:
+      redfish_username: root
+      # NOTE: the redfish password is not shown here, but it should be
+      #       configured to match whatever is configured for RedFish
+      #       on the BMC.
+      redfish_password: null
+      mac: 52:54:00:b2:2e:f4  # Get this from the BMC
+      # The BMC is on a Hardware Management Network (1.3.1.1/24)
+      ipv4: 10.3.1.1
+
+# The 'hosting_config' section contains information about the cluster
+# and its networks and supporting environment.
+hosting_config:
+  cluster_name: demo
+  cluster_net_dhcp_start: 10.2.1.32
+  cluster_net_dhcp_end: 10.2.1.254
+  cluster_net_mask: 255.255.255.0
+  net_head_dns_server: 10.234.0.1
+  net_head_domain: openchami.cluster
+  net_head_hostname: demo
+  net_head_ip: 10.2.1.2
+
+# The 'nodes' section describes the compute nodes that will show
+# up on the cluster network.
+nodes:
+- name: x2000c0s0b0n0
+  bmc_name: x2000c0s0b0
+  cluster_net_interface: compnet
+  hostname: compute-001
+  nid: 1
+  node_group: compute
+  interfaces:
+  - network_name: compnet
+    # Get this from the node's NIC on the cluster network
+    mac_addr: 52:54:00:3d:71:7b
+    ip_addrs:
+    - name: compnet
+      ip_addr: 10.2.1.32
+- name: x2000c0s0b0n1
+  bmc_name: x2000c0s0b0
+  cluster_net_interface: compnet
+  hostname: compute-002
+  nid: 2
+  node_group: compute
+  interfaces:
+  - network_name: compnet
+    # Get this from the node's NIC on the cluster network
+    mac_addr: 52:54:00:6a:d2:33
+    ip_addrs:
+    - name: compnet
+      ip_addr: 10.2.1.33
+- name: x2000c0s0b0n2
+  bmc_name: x2000c0s0b0
+  cluster_net_interface: compnet
+  hostname: compute-003
+  nid: 3
+  node_group: compute
+  interfaces:
+  - network_name: compnet
+    # Get this from the node's NIC on the cluster network
+    mac_addr: 52:54:00:3b:aa:78
+    ip_addrs:
+    - name: compnet
+      ip_addr: 10.2.1.34
+- name: x2000c0s0b0n3
+  bmc_name: x2000c0s0b0
+  cluster_net_interface: compnet
+  hostname: compute-004
+  nid: 4
+  node_group: compute
+  interfaces:
+  - network_name: compnet
+    # Get this from the node's NIC on the cluster network
+    mac_addr: 52:54:00:06:48:e8
+    ip_addrs:
+    - name: compnet
+      ip_addr: 10.2.1.35
