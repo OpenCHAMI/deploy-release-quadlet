@@ -22,10 +22,28 @@ server4:
         svc_base_uri=https://{{ hosting_config.net_head_hostname }}.{{
         hosting_config.net_head_domain }}:8443
 {%- if openchami_config.use_boot_service %}
-        ipxe_uri=http://{{ hosting_config.net_head_ip }}:8081/boot-service/bootscript
-{%- else %}
-        ipxe_uri=http://{{ hosting_config.net_head_ip }}:8081/bss/bootscript
-{%- endif %}
+{%- if openchami_config.use_ipxe_base_uri %}
+        # Older coredhcp configurations use 'ipxe_base_uri' to point to
+        # the base URI of the boot script, supplying their own
+        # 'bootscript' at the end.
+        ipxe_base_uri=http://{{ hosting_config.net_head_ip}}:8081/boot-service
+{%- else %} {# use_ipxe_base_url #}
+        # Newer coredhcp configurations use 'ipxe_uri' to point to
+        # the full URI of the boot script.
+        ipxe_uri=http://{{ hosting_config.net_head_ip}}:8081/boot-service/bootscript
+{%- endif %} {# use_ipxe_base_url #}
+{%- else %}  {# use_boot_service #}
+{%- if openchami_config.use_ipxe_base_uri %}
+        # Older coredhcp configurations use 'ipxe_base_uri' to point to
+        # the base URI of the boot script, supplying their own
+        # 'bootscript' at the end.
+        ipxe_base_uri=http://{{ hosting_config.net_head_ip}}:8081/bss/v1
+{%- else %}  {# use_ipxe_base_url #}
+        # Newer coredhcp configurations use 'ipxe_uri' to point to
+        # the full URI of the boot script.
+        ipxe_uri=http://{{ hosting_config.net_head_ip }}:8081/bss/v1/bootscript
+{%- endif %} {# use_ipxe_base_url #}
+{%- endif %} {# use_boot_service #}
         ca_cert=/root_ca/root_ca.crt
         cache_valid=30s
         lease_time=1h
@@ -37,8 +55,8 @@ server4:
         lease_time=5m
         ipv4_start={{ hosting_config.cluster_net_dhcp_start }}
         ipv4_end={{ hosting_config.cluster_net_dhcp_end }}
-{%- else %}
+{%- else %} {# coredhcp_named_parameters #}
     - coresmd: https://{{ hosting_config.net_head_hostname }}.{{ hosting_config.net_head_domain }}:8443 http://{{ hosting_config.net_head_ip }}:8081 /root_ca/root_ca.crt 30s 1h false
 # DHCP settings...
     - bootloop: /tmp/coredhcp.db default 5m {{ hosting_config.cluster_net_dhcp_start }} {{ hosting_config.cluster_net_dhcp_end }}
-{%- endif %}
+{%- endif %} {# coredhcp_named_parameters #}
