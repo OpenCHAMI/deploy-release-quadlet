@@ -49,7 +49,7 @@ from .error import ContextualError, ConfigError
 # number groups whose values are less than 60 each into a base 60
 # integer. This messes with MAC addresses and is of no use in this
 # code. Disable it.
-SafeLoader.yaml_implicit_resolvers.pop(":")
+SafeLoader.yaml_implicit_resolvers.pop(":", None)
 
 
 # Create a custom representer for yaml SafeDumper to dump multiline strings
