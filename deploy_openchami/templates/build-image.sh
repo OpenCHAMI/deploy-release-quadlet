@@ -73,7 +73,7 @@ kernel: '${uri_kernel}'
 initrd: '${uri_initramfs}'
 params: 'nomodeset ro root=live:${uri_img} ip=dhcp overlayroot=tmpfs overlayroot_cfgdisk=disabled apparmor=0 selinux=0 console=ttyS0,115200 ip6=off ${cloud_init}'
 macs:
-$(for mac in ${macs}; do echo "  - ${mac}"; done)
+$(for mac in ${macs}; do echo "  - \"${mac}\""; done)
 EOF
 }
 
