@@ -296,6 +296,26 @@ nodes:
 A maintained version of the above configuration overlay is provided in
 [docs/example-overlays/config-cluster-mode.yaml](docs/example-overlays/config-cluster-mode.yaml).
 
+### Configuring The Tool to Deploy Older Release Versions
+
+This repository provides a set of configuration overlay example
+configurations intended to preserve the behavior needed to deploy older
+versions of OpenCHAMI Release. The most recent version of the tool
+will be configured to deploy the most recent OpenCHAMI release, but
+that configuration can be overlayed by using the appropriate overlay
+from `docs/example-overlays`. For example, to set the tool up to
+deploy OpenCHAMI Release v0.1.4 through v0.1.6, copy
+`docs/example-overlays/config-0.1.4` to your current directory and
+run
+
+```
+sudo ~/venv/bin/deploy_openchami config-0.1.4.yaml config.yaml
+```
+
+where `config.yaml` is your personal configuration overlay file (if
+any) and `config-0.1.4.yaml` is the overlay for OpenCHAMI Release
+versions v0.1.4 through v0.1.6.
+
 ### Working with the Deployment Tool Configuration
 
 When creating a configuration overlay, it helps to know what the
