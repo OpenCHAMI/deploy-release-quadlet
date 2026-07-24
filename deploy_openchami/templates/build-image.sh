@@ -10,7 +10,7 @@ function _bi_fail() {
 alias die="return 1"
 
 function yaml_to_json() {
-    python3 -c 'import yaml, json, sys; json.dump(yaml.safe_load(sys.stdin), sys.stdout, indent=2)'
+    python3 -c 'import yaml, json, sys; yaml.SafeLoader.yaml_implicit_resolvers.pop(":"); json.dump(yaml.safe_load(sys.stdin), sys.stdout, indent=2)'
 }
 
 function build-image() {

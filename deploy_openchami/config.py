@@ -28,6 +28,7 @@ from random import randint
 
 from yaml import (
     SafeDumper,
+    SafeLoader,
     YAMLError,
     dump as yaml_dumps,
     safe_load,
@@ -43,6 +44,12 @@ from . import (
     BASE_CONFIG_PATH
 )
 from .error import ContextualError, ConfigError
+
+# YAML 1.1 has an implicit conversion of colon separate two digit
+# number groups whose values are less than 60 each into a base 60
+# integer. This messes with MAC addresses and is of no use in this
+# code. Disable it.
+SafeLoader.yaml_implicit_resolvers.pop(":")
 
 
 # Create a custom representer for yaml SafeDumper to dump multiline strings
