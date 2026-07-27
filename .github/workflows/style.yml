@@ -1,0 +1,26 @@
+# SPDX-FileCopyrightText: (C) Copyright 2024-2026 OpenCHAMI a Series of LF Projects, LLC
+# SPDX-License-Identifier: MIT
+name: Python (style)
+
+on: [push]
+
+jobs:
+  style:
+    name: Style
+    strategy:
+      matrix:
+        version: ['3.12', '3.11', '3.10', '3.9']
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v6
+      with:
+        fetch-depth: 0 # Also fetch git-tags
+    - name: Set up Python
+      uses: actions/setup-python@v6
+      with:
+        python-version: ${{ matrix.version }}
+    - name: nox
+      run: |
+        pip install .[ci]
+        pip install .[style]
+        nox -e style
