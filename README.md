@@ -296,6 +296,152 @@ nodes:
 A maintained version of the above configuration overlay is provided in
 [docs/example-overlays/config-cluster-mode.yaml](docs/example-overlays/config-cluster-mode.yaml).
 
+### Configuring the Tool to Skip Specific Deployment Phases
+
+The Deployment Tool runs in 8 distinct phases, through two sequential
+commands:
+
+- `deploy_openchami -p ...`
+- `deploy_openchami ...`
+
+The `deploy_openchami -p ...` command runs the `setup_node` phase, if
+it is enabled. The `deploy_openchami ...` command runs the remaining
+enabled phases.
+
+Here is a description of each phase.
+
+#### Setup Node
+
+The `setup_node` phase prepares the host node for the deployment of
+OpenCHAMI. It does the following:
+
+- Reset DNS to original settings (in case they have been changed by a
+  previous run of `deploy_openchami`)
+- Install required packages
+- Create the deployment user (check first, create if absent)
+- Add deployment user to sudoers with NOPASSWD (check first)
+- Copy deployment user's s3cfg file to user's directory
+- Turn on IP forwarding
+- Set up the virtual environment for 'host' mode if applicable
+
+These actions are quite idempotent, and it is generally a good idea to
+let them run whenever the `-p` option is used, so disabling this phase
+is discouraged.
+
+#### Setup S3 and Registry
+
+The `setup_s3_and_registry` phase sets up a management node hosted S3
+server and OCI registry that your OpenCHAMI installation can use if
+you do not have site provided instances of these. You can skip this
+phase if you have configured your deployment to use existing services
+or if you have already deployed OpenCHAMI using the deployment tool
+and want to re-use the artifacts stored in the management node hosted
+services.
+
+#### Prepare OpenCHAMI
+
+The `prepare_openchami` phase does the following:
+
+- Remove any existing 'ochami' package installation
+- Install 'ochami' (download RPM or build from source)
+- Remove any existing 'openchami' package installation
+- Remove any existing 'openchami-release' git repo
+- Set up new OpenCHAMI Release repo, check out specified version, build RPM
+
+If you are developing code in either OpenCHAMI Release or `ochami` you
+probably want to run this phase every time. If you are developing code
+for an OpenCHAMI service and want to modify the local OpenCHAMI
+Release to pick up your changes, you probably want to skip this phase
+so you can edit and manually rebuild the already cloned instance of
+OpenCHAMI Release which can be found in your deployment directory (by
+default, `/opt/workdir/openchami_release`) after the first fully
+enabled run of the tool.
+
+#### Install OpenCHAMI
+
+The `install_openchami` phase does the following:
+
+- Merge the openchami.env configuration file
+  (/etc/openchami/configs/openchami.env) from configured settings -
+  Install the OpenCHAMI Release RPM built by prepare-openchami or by
+  hand by you
+
+This is generally a big part of using the Deployment Tool, so it is
+unlikely you want to disable this step unless you are working on one
+of the earlier or later phases and are either happy with the existing
+OpenCHAMI installation or want to hold off on installation.
+
+#### Start OpenCHAMI
+
+The `start_openchami` phase does the following:
+
+- Shut down any currently running instance of openchami.target
+- Set up OpenCHAMI system files needed for this run
+- Start openchami.target
+- Configure the ochami CLI client
+- Wait for SMD to start
+
+Again, this is usually what you are using the deployment tool
+for. Unless you are debugging the earlier phases you probably want to
+let this phase run.
+
+#### Configure Cluster
+
+The `configure_cluster` phase runs static discovery using a generated
+`nodes.yaml` file. If you started OpenCHAMI after re-installing it,
+you will need this phase to run as well for later phases to work. If
+you are using an already installed, started and discovered OpenCHAMI,
+skip this phase to avoid conflicts.
+
+NOTE: there is currently a bug in SMD that causes a spurious report of a
+      failure in static discovery. This error is currently being ignored
+      when it occurs.
+
+#### Build Images
+
+The `build_images` phase builds the configured set of node images and
+stores them in the registry and in S3 for use in booting managed
+nodes. This is by far the most time consuming part of deploying
+OpenCHAMI using the tool, so it is useful to disable it and the
+`setup_s3_and_registry` phase if you have externally provided S3 and
+Registry services or if you have previously built images and stored
+them in the managment node hosted services.
+
+#### Boot Managed Nodes
+
+The `boot_managed_nodes` phase does the following:
+
+- On cluster systems, switch DNS to the coresmd-coredns server
+- Set up boot service configuration for the nodes
+- Set up cloud-init metadata for nodes
+- Boot managed nodes (host mode: create VMs; cluster mode: power cycle)
+- Try to SSH to the nodes as a sanity check
+
+This phase proves that your deployment is working. Skip it if you just want to deploy onto a system and then begin provisioning and booting nodes yourself.
+
+#### Configuring the Desired Phases
+
+To configure the phases, write an overlay file that specifies which
+phases you would like to disable (all phases are enabled by
+default). To disable a phase change its setting in the
+`openchami_config.deployment_phases` configuration to `false`. The
+following illustrates a specific configuration overlay that is useful
+for skipping the `setup_s3_and_registry` phase and the `build_images`
+phases:
+
+```
+openchami_config:
+  deployment_phases:
+    setup_node: true
+    setup_s3_and_registry: false
+    prepare_openchami: true
+    install_openchami: true
+    start_openchami: true
+    configure_cluster: true
+    build_images: false
+    boot_managed_nodes: true
+```
+
 ### Configuring The Tool to Deploy Older Release Versions
 
 This repository provides a set of configuration overlay example
