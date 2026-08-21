@@ -393,10 +393,6 @@ you will need this phase to run as well for later phases to work. If
 you are using an already installed, started and discovered OpenCHAMI,
 skip this phase to avoid conflicts.
 
-NOTE: there is currently a bug in SMD that causes a spurious report of a
-      failure in static discovery. This error is currently being ignored
-      when it occurs.
-
 #### Build Images
 
 The `build_images` phase builds the configured set of node images and

@@ -23,14 +23,10 @@ done
     { fail "cannot obtain ochami access token"; exit 1; }
 
 # ── Perform static node discovery ───────────────────────────────
-#
-# NOTE: The '|| true' part of this command is here to work around SMD
-# issue 118. Once that has been resolved, that should be removed. This
-# is being tracked locally by issue 19.
 info "configure-cluster: performing static node discovery"
 # shellcheck disable=SC2046
 ochami discover static $(discovery_version) \
     -f yaml \
-    -d @"${DEPLOY_DIR}/nodes/nodes.yaml" || true
+    -d @"${DEPLOY_DIR}/nodes/nodes.yaml"
 
 info "configure-cluster: complete"
