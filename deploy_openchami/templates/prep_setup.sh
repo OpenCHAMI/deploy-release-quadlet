@@ -19,7 +19,7 @@ function error_handler() {
     echo "an error occurred -- here is the status of OpenCHAMI Components:" >&2
     sudo systemctl list-dependencies openchami.target >&2
     echo "exiting on error [${exitval}] from ${filename}:${lineno}" >&2
-    exit ${exitval}
+    exit "${exitval}"
 }
 [[ "${-}" == *i* ]] || trap 'error_handler "${BASH_SOURCE[0]}" "${LINENO}" "${?}"' ERR
 
@@ -27,7 +27,6 @@ function fail() {
     local message="${*:-"failing for no specified reason"}"
     echo "${BASH_SOURCE[1]}:${BASH_LINENO[0]}:[${FUNCNAME[1]}]: ${message}" >&2
 }
-alias die="return 1"
 
 function info() {
     local message="${*:-"failing for no specified reason"}"
@@ -35,11 +34,13 @@ function info() {
 }
 
 function derive_architecture() {
-    local uname_arch="$(uname -m)"
-    case "${uname_arch}" in
+    case "$(uname -m)" in
         arm64|aarch64) echo "arm64";;
         amd64|x86_64) echo "amd64";;
-        *) { fail "unknown platform architecture '${uname_arch}'"; die; };;
+        *) {
+            fail "unknown platform architecture '$(uname -m)'"
+            return 1
+        };;
     esac
 }
 
@@ -49,14 +50,13 @@ function discovery_version() {
     # that if the version is 2.18 or lower.
     local major=""
     local minor=""
-    local patch=""
-    IFS='.' read major minor patch < \
+    IFS='.' read -r major minor _ < \
        <( \
           sudo podman ps | \
               grep '/smd:v' | \
               awk '{sub(/^.*:v/, "", $2); print $2 }'\
        )
-    if [ "${major}" -le "2" -a "${minor}" -lt "19" ]; then
+    if [[ "${major}" -le "2" ]] && [[ "${minor}" -lt "19" ]]; then
        echo "--discovery-version=1"
     fi
 }
@@ -84,7 +84,10 @@ EOF
 }
 
 function find_if_by_addr() {
-    addr=${1}; shift || { fail "no ip addr supplied when looking up ip interface"; die; }
+    addr=${1}; shift || {
+        fail "no ip addr supplied when looking up ip interface"
+        return 1
+    }
     ip --json a | \
         jq -r "\
           .[] | .ifname as \$ifname | \
@@ -95,6 +98,28 @@ function find_if_by_addr() {
         "
 }
 
+function save_dns() {
+    local connection="${1}"; shift || {
+        fail "no connection specified to save"
+        return 1
+    }
+    # Set up to capture the initial DNS settings of connections if
+    # this is the first time we are saving the DNS state for this
+    # connection. After that, we leave the connection alone.
+    [[ -f "${SAVED_DNS}" ]] || mkdir -p "$(dirname ${SAVED_DNS})"
+    touch "${SAVED_DNS}"
+    if ! grep -q "${connection}" "${SAVED_DNS}"; then
+        nmcli connection show "${connection}" | \
+            grep -e "ipv[46].dns-search:" \
+                 -e "ipv[46].dns:" \
+                 -e "ipv[46].ignore-auto-dns:" \
+            | sed -e 's/: */ /' \
+            | while read -r property val; do
+            echo "${connection} ${property} ${val}" >> "${SAVED_DNS}"
+        done
+    fi
+}
+
 function switch_dns() {
     # This function uses nmcli to find and remove all nameservers from
     # the current configuration and then to add back only the local
@@ -103,47 +128,112 @@ function switch_dns() {
     #
     # First, get the list of connections (interfaces) with nameservers
     # assigned to them...
-    local nameserver="${1}"; shift || { fail "no nameserver specified to switch to"; die; }
-    local domain="${1}"; shift || { fail "no search domain specified"; die; }
-    local connection=""
-    local connections="$(
-        for connection in $(nmcli --terse --fields NAME connection show); do
-            echo -n "${connection} "
-            nmcli connection show "${connection}" | grep ipv4.dns:
-        done | grep -v '[-]-' | cut -d ' ' -f 1
-    )"
-
+    local nameserver="${1}"; shift || {
+        fail "no nameserver specified to switch to"
+        return 1
+    }
+    local domain="${1}"; shift || {
+        fail "no search domain specified"
+        return 1
+    }
+    local connections=""
+    for connection in $(nmcli --terse --fields NAME connection show); do
+        nmcli connection show "${connection}" | grep -q 'ipv4.dns:' || continue
+        nmcli connection show "${connection}" | grep -q 'ipv4.dns: *--' && continue
+        connections="${connections} ${connection}"
+    done
+    
     # Now, strip off the nameserver from each of the affected connections...
+    info "switching dns on [${connections}]"
     for connection in ${connections}; do
+        info "connection = '${connection}'"
+        # shellcheck disable=SC2015
         sudo nmcli connection modify "${connection}" ipv4.dns "" && \
             sudo nmcli connection down "${connection}" && \
-            sudo nmcli connection up "${connection}"
+            sudo nmcli connection up "${connection}" || {
+                fail "WARNING: unable to strip NS from '${connection}'"
+                # Don't actually fail here, treat it as a warning...
+                continue
+            }
     done
 
     # Now find the first interface (nmcli connection) that routes to
     # the desired name server IP address.
     connection="$(ip --json route get "${nameserver}" | jq -r '.[0] | .dev')"
-    [[ "${connection}" != "" ]] || { fail "no interface found that can reach the DNS server '${nameserver}'"; die; }
+    [[ "${connection}" != "" ]] || {
+        fail "no interface found that can reach the DNS server '${nameserver}'"
+        return 1
+    }
 
     # Set the nameserver on the connection and put the cluster domain
     # in the search on the same connection
-    sudo nmcli connection modify "${connection}" ipv4.dns "${nameserver}" && \
+    #
+    # shellcheck disable=SC2015
+    save_dns "${connection}" && \
+        sudo nmcli connection modify "${connection}" ipv4.dns "${nameserver}" && \
         sudo nmcli connection modify "${connection}" ipv4.dns-search "${domain}" && \
         sudo nmcli connection down "${connection}" && \
-        sudo nmcli connection up "${connection}"
+        sudo nmcli connection up "${connection}" || {
+            fail "unable to add NS to '${connection}'"
+            return 1
+        }
+}
+
+function reset_dns() {
+    # Reset DNS on all connections that might have been modified by
+    # 'switch_dns' to what they were before the first time
+    # 'switch_dns' was called.
+    if [[ -f "${SAVED_DNS}" ]]; then
+        # Reset all of the saved connections to theis saved values
+        #
+        # shellcheck disable=SC2002
+        cat "${SAVED_DNS}" | while read -r connection property val; do
+            if [[ "${val}" == "--" ]]; then
+                val=""
+            fi
+            sudo nmcli connection modify "${connection}" "${property}" "${val}"
+        done
+        # Cycle the connections down and up to restore the actual
+        # run-time behavior.
+        connections="$(cut -d ' ' -f 1 "${SAVED_DNS}" | sort -u)"
+        for connection in ${connections}; do
+            sudo nmcli connection down "${connection}" && \
+            sudo nmcli connection up "${connection}"
+        done
+    fi
+}
+
+function yaml_to_json() {
+    python3 -c 'import yaml, json, sys; yaml.SafeLoader.yaml_implicit_resolvers.pop(":", None); json.dump(yaml.safe_load(sys.stdin), sys.stdout, indent=2)'
 }
 
 # Some useful variables that can be templated
+#
+# shellcheck disable=SC2034
 CLUSTER_DOMAIN="{{ hosting_config.net_head_domain }}"
+# shellcheck disable=SC2034
 CLUSTER_NAME="{{ hosting_config.cluster_name }}"
+# shellcheck disable=SC2034
 MANAGEMENT_HEADNODE_IP="{{ hosting_config.net_head_ip }}"
+# shellcheck disable=SC2034
 MANAGEMENT_HEADNODE_NAME="{{ hosting_config.nethead_hostname }}"
+# shellcheck disable=SC2034
 MANAGEMENT_HEADNODE_FQDN="{{ hosting_config.net_head_hostname }}.{{ hosting_config.net_head_domain }}"
+# shellcheck disable=SC2034
 MANAGEMENT_EXT_NAMESERVER="{{ hosting_config.net_head_dns_server }}"
+# shellcheck disable=SC2034
 MGMT_NET_HEAD_IFNAME="$(find_if_by_addr "${MANAGEMENT_HEADNODE_IP}")"
+# shellcheck disable=SC2034
 DEPLOY_DIR="{{ manifest.deployment_directory }}"
+# shellcheck disable=SC2034
 DEPLOY_USER="{{ manifest.deployment_user.username }}"
+# shellcheck disable=SC2034
 DEPLOY_GROUP="{{ manifest.deployment_user.primary_group }}"
+# shellcheck disable=SC2034
 S3_API_PORT="{{ openchami_config.s3.api_port }}"
+# shellcheck disable=SC2034
 S3_CONSOLE_PORT="{{ openchami_config.s3.console_port }}"
+# shellcheck disable=SC2034
 REGISTRY_API_PORT="{{ openchami_config.registry.api_port }}"
+# shellcheck disable=SC2034
+SAVED_DNS="${DEPLOY_DIR}/saved_data/dns_settings"
