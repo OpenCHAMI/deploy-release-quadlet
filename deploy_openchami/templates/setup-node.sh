@@ -18,6 +18,30 @@
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" > /dev/null && pwd )"
 source "${SCRIPT_DIR}/prep_setup.sh"
 
+function remove_virtual_network() {
+    local net="${1}"; shift || { fail "no virtual network specified"; die; }
+
+    # If the network is not defined at all, there is nothing to do,
+    # just return success
+    if ! sudo virsh net-list --all | grep -q "${net}"; then
+        return 0
+    fi
+
+    # If the network is 'active' we will want to destroy it
+    active="$(sudo virsh net-info "${net}" | grep "Active:" | sed -e 's/^Active: *//')"
+
+    # if the network is persistent we will want to undefine it as well
+    persist="$(sudo virsh net-info "${net}" | grep "Persistent:" | sed -e 's/^Persistent: *//')"
+
+    # Clean up the network...
+    if [[ "${active}" == "yes" ]]; then
+        sudo virsh net-destroy "${net}"
+    fi
+    if [[ "${persist}" == "yes" ]]; then
+       sudo virsh net-undefine "${net}"
+    fi
+}
+
 {%- if not openchami_config.deployment_phases.setup_node %}
 info "setup-node: skipping node setup as requested by config"
 exit 0
@@ -138,7 +162,7 @@ sudo cp "${DEPLOY_DIR}/s3cfg" "${s3cfg}"
 sudo chown "${DEPLOY_USER}":"${DEPLOY_GROUP}" "${s3cfg}"
 
 # ── Put cluster information in /etc/hosts ───────────────────
-info "setup-node: put cluster information in /e/tc/hosts"
+info "setup-node: put cluster information in /etc/hosts"
 
 # Set up an /etc/hosts entry for the OpenCHAMI management head node so
 # we can use it for certs and for reaching the services before any other
@@ -158,8 +182,7 @@ sudo sysctl -w net.ipv4.ip_forward=1
 #
 # First clean up what is there then add the ones we need
 info "setup-node: removing the virtual network for the compute node VM(s) to use"
-sudo virsh net-destroy {{ hosting_config.cluster_net_name }} || true
-sudo virsh net-undefine {{ hosting_config.cluster_net_name }} || true
+remove_virtual_network "{{ hosting_config.cluster_net_name }}"
 
 info "setup-node: configuring a virtual network for the compute node VM(s) to use"
 sudo virsh net-define /opt/workdir/openchami-net.xml
