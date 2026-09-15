@@ -5,7 +5,7 @@ Wants=local-fs.target network-online.target
 
 [Container]
 ContainerName=minio-server
-Image=docker.io/minio/minio:latest
+Image=quay.io/minio/minio:latest
 # Volumes
 Volume=/data/s3:/data:Z
 
