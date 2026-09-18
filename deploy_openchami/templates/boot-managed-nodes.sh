@@ -111,6 +111,42 @@ done
     {% endfor %}
 }
 
+function wait_for_host_script() {
+    # Try to retrieve the boot script for the specified host. We do this
+    # by asking the boot service (BSS or boot-service) for the boot script
+    # using Curl. To be permitted to do this we need to use the
+    # "X-FORWARDED-FOR: <IP>" header with Curl to masquerade as the node
+    # we are checking on. If it works, we are good to go, if not we sleep
+    # 5 seconds and retry. Time out after 15 minutes (or the optionally
+    # provided number of attempts) and fail.
+    local host_id="${1}"; shift || { fail "no target host id provided"; die; }
+    local host_ip="${1}"; shift || { fail "no target host ip provided"; die; }
+    local attempts="${1:-180}"
+    
+    for ((i = 0; i < attempts; i++)); do
+        # Learn the URI that coresmd-coredns is going to hand out for
+        # obtaining the boot script and use that here.  This ensures
+        # we are using the same URI that coresmd-coredns is using, so
+        # it should match what the boot sequence sees.
+        boot_uri="$( \
+          yaml_to_json < /etc/openchami/configs/coredhcp.yaml | \
+          jq -r '.server4.plugins | .[] | select(has("coresmd")).coresmd' | \
+          grep 'ipxe_uri=' | \
+          sed -e 's/^[^=]*= *//' \
+        )"
+        if curl -s "${boot_uri}?host=${host_id}" \
+                -H "X-FORWARDED-FOR: ${host_ip}" \
+                -o /dev/null; then
+            info "waited $((i * 5)) seconds for '${host_id}' boot script"
+            return 0
+        fi
+        sleep 5
+    done
+    # We timed out waiting for the script to be ready...
+    fail "timed out waiting for '${host_id}' boot script to be ready"
+    return 1
+}
+
 function ssh_to_compute_node() {
     local hostname="${1}"; shift || { fail "no hostname specified"; die; }
     local user="${1}"; shift || { fail "no deployment username provided"; die; }
@@ -121,7 +157,7 @@ function ssh_to_compute_node() {
     local time="-o ConnectTimeout=10"
     local where="root@${hostname}"
     info "attempting SSH to ${hostname} as ${user}"
-    for ((retry=0; retry<retries; ++retry)); do
+    for ((retry=0; retry < retries; ++retry)); do
         if sudo su - "${user}" -c \
                 "ssh ${check} ${file} ${time} ${where} '${cmd}'"; then
             info "SSH to ${hostname} succeeded"
@@ -133,9 +169,77 @@ function ssh_to_compute_node() {
     return 1
 }
 
+# Reset a compute node either using RedFish on a BMC, if we are
+# deploying in 'cluster' mode, or using 'virsh destroy' and 'virsh
+# start' if we are deploying in host mode.
+function restart_compute_node() {
+    local node_name="${1}"; shift || { fail "no node given for reset"; die; }
+    local bmc_name="${1}"; shift || { fail "no BMC given for reset"; die; } 
+{%- if deployment_mode == 'cluster' %}
+    info "boot-managed-nodes: power-cycling '${node_name}[BMC=${bmc_name}]'"
+    power-off-node "${node_name}" "${bmc_name}" || true
+    power-on-node "${node_name}" "${bmc_name}"
+{%- else %}
+    info "boot-managed-nodes: restarting VM '${node_name}'"
+    sudo virsh destroy "${node_name}" || true
+    sudo virsh start "${node_name}"
+{%- endif %}
+}
+
+# (Re-)create a host mode compute node (VM on the management node) if
+# we are deploying in 'host' mode. Restart the node (which already exists
+# outside of the deployment process) if we are deploying in cluster mode.
+function create_compute_node() {
+    local node_name="${1}"; shift || { fail "no node given for reset"; die; }
+    local bmc_name="${1}"; shift || { fail "no BMC given for reset"; die; } 
+    local interfaces=("$@")
+
+{%- if deployment_mode == 'host' %}
+    info "boot-managed-nodes: launching VM '${node_name}'"
+    if sudo virsh list --all | grep -q "${node_name}"; then
+        info "boot-managed-nodes: detroying existing VM '${node_name}'"
+        sudo virsh destroy "${node_name}" || true
+        info "boot-managed-nodes: undefining existing VM '${node_name}'"
+        sudo virsh undefine "${node_name}" --nvram || \
+            info "could not undefine '${node_name}'"
+    fi
+    if [ "$(derive_architecture)" == 'amd64' ]; then
+        UEFI="loader=/usr/share/OVMF/OVMF_CODE.secboot.fd,loader.readonly=yes,loader.type=pflash,nvram.template=/usr/share/OVMF/OVMF_VARS.fd,loader_secure=no"
+    else
+        UEFI="uefi"
+    fi
+    local network_opts=""
+    for interface in "${interfaces[@]}"; do
+        network_opts="${network_opts} --network ${interface}"
+    done
+    # Notice that '$network_opts' is not quoted here. That is
+    # intentional because we are expanding multiple '--network'
+    # options and their arguments. If '$network_opts' were quoted, it
+    # would expand as one big string and fail the command usage.
+    #
+    # shellcheck disable=SC2046
+    sudo virt-install \
+         --name "${node_name}" \
+         --memory 4096 \
+         --vcpus 1 \
+         --disk none \
+         --pxe \
+         --os-variant centos-stream9 \
+         ${network_opts} \
+         --graphics none \
+         --console pty,target_type=serial \
+         --boot network,hd \
+         --boot "${UEFI}" \
+         --virt-type kvm \
+         --noautoconsole
+{%- else %}
+    restart_compute_node "${node_name}" "${bmc_name}"
+{%- endif %}
+}
+
 # ── Get OCHAMI Token ─────────────────────────────────────────────
 info "boot-managed-nodes: waiting for an ochami access token"
-for _ in {1..10}; do
+for ((i = 0; i < 10; i++ )); do
     get-ochami-token || DEMO_ACCESS_TOKEN=""
     [ -n "${DEMO_ACCESS_TOKEN}" ] && break
     sleep 10
@@ -170,6 +274,10 @@ for builder in "${IMAGE_BUILDERS[@]}"; do
     S3_PREFIX="$(yaml_to_json < "${builder}" | \
         jq -r '.options.s3_prefix' | sed -e 's:/[[:blank:]]*$::')"
     [[ "${S3_PREFIX}" != "null" ]] || continue
+    # Notice that '$(managed_macs)' is not quoted here. That is
+    # because we are expanding a list of MAC addresses, and want each
+    # one to be a separate argument.
+    #
     # shellcheck disable=SC2046
     generate-boot-config-json \
         "${S3_PREFIX}" \
@@ -225,45 +333,36 @@ fi
 {% endfor %}
 {%- endif %}
 
-# ── Boot managed nodes ────────────────────────────────────────────────
+# ── Create managed nodes as needed ─────────────────────────────────────
+#
+# This could be done in-line with booting the nodes, which would
+# simplify the retry logic in the case where a boot fails the first
+# time. By doing it here, though, we give the nodes, especially when
+# there is more than one node in the cluster) more parallel time to
+# boot meaning the check for whether they booted runs faster in the
+# non-retry case.
 {%- for node in nodes %}
-{%- if deployment_mode == 'cluster' %}
-info "boot-managed-nodes: power-cycling '{{ node.name }}'"
-power-off-node "{{ node.name }}" "{{ node.bmc_name }}" || true
-power-on-node "{{ node.name }}" "{{ node.bmc_name }}"
-{%- else %}
-info "boot-managed-nodes: launching VM '{{ node.name }}'"
-if sudo virsh list --all | grep -q "{{ node.name }}"; then
-    sudo virsh destroy "{{ node.name }}" || true
-    sudo virsh undefine "{{ node.name }}" --nvram || \
-        info "could not undefine '{{ node.name }}'"
-fi
-if [ "$(derive_architecture)" == 'amd64' ]; then
-    UEFI="loader=/usr/share/OVMF/OVMF_CODE.secboot.fd,loader.readonly=yes,loader.type=pflash,nvram.template=/usr/share/OVMF/OVMF_VARS.fd,loader_secure=no"
-else
-    UEFI="uefi"
-fi
-sudo virt-install \
-     --name {{ node.name }} \
-     --memory 4096 \
-     --vcpus 1 \
-     --disk none \
-     --pxe \
-     --os-variant centos-stream9 \
-{%- for interface in node.interfaces %}
-     --network network={{ interface.network_name }},model=virtio,mac={{ interface.mac_addr }} \
+# Collect the network interface information for the node
+interfaces=(
+{%- for iface in node.interfaces %}
+    "network={{ iface.network_name }},model=virtio,mac={{ iface.mac_addr }}"
 {%- endfor %}
-     --graphics none \
-     --console pty,target_type=serial \
-     --boot network,hd \
-     --boot "${UEFI}" \
-     --virt-type kvm \
-     --noautoconsole
-{%- endif %}
+)
+create_compute_node "{{ node.name }}" "{{ node.bmc_name }}" "${interfaces[@]}"
 {%- endfor %}
 
-# ── Verify SSH connectivity ────────────────────────────────────────────
+
+# ── Boot managed nodes and verify SSH connectivity ─────────────────────
 {%- for node in nodes %}
+  {#
+   the following loop is intended to find the first IP address on the cluster
+   network. It should produce only one wait_for_host_script /
+   ssh_to_compute_node pair per node.
+  #}
+  {%- for interface in node.interfaces %}
+    {%- if interface.network_name == node.cluster_net_interface %}
+wait_for_host_script "{{ node.name }}" "{{ interface.ip_addrs[0].ip_addr }}"
 ssh_to_compute_node "$(printf "nid-%3.3d" {{ node.nid }})" "${DEPLOY_USER}"
+    {%- endif %}
+  {%- endfor %}
 {%- endfor %}
-
