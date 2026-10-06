@@ -160,13 +160,6 @@ manifest:
       group: root
       mode: "644"
       mkdir: true
-    minio-container:
-      template_name: minio.container
-      target: /etc/containers/systemd/minio.container
-      mode: "644"
-      owner: root
-      group: root
-      mkdir: false
     registry-container:
       template_name: registry.container
       target: /etc/containers/systemd/registry.container
@@ -277,18 +270,6 @@ manifest:
       target: s3-public-read-efi.json
       mode: "644"
       mkdir: true
-    s3cfg:
-      # This will be copied into the deployment user's home directory as
-      # '.s3cfg'. For now, put it in the deployment directory so we have
-      # it.
-      annotations:
-        - host-prep-support
-      template_name: s3cfg
-      target: s3cfg
-      mode: "644"
-      owner: root
-      group: root
-      mkdir: true
 
 # The following provides BMC information. For simple stand-alone
 # deployments, there are no "real" BMCs (unless your system has them and
@@ -375,7 +356,6 @@ openchami_config:
     # to match SMD_AUTH_ISSUER
     TOKENSMITH_ISSUER: http://tokensmith:8080
 
-
   # The coredhcp configuration has an old form in which all of the
   # plug-in parameters are positional and a newer form in which all of the
   # plug-in parameters are named. The `coredhcp_named_parameters` flag tells
@@ -419,8 +399,8 @@ openchami_config:
   # S3 has two ports, the API port where API operations are handled and
   # the Web-UI (console) port.
   s3:
-    api_port: 9000
-    console_port: 9001
+    api_port: 7070
+
   # The registry has one port, the API port where API operations are
   # handled.
   registry:
@@ -443,7 +423,7 @@ openchami_config:
   #   1. setup_node              - install packages, create deploy user,
   #                                grant passwordless sudo, create
   #                                /opt/workdir tree
-  #   2. setup_s3_and_registry   - tear down and reinitialise minio and
+  #   2. setup_s3_and_registry   - tear down and reinitialise S3 and
   #                                registry, install regctl, create S3
   #                                buckets
   #   3. prepare_openchami       - remove old ochami/openchami installs,
