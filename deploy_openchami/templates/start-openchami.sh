@@ -27,16 +27,27 @@ if sudo systemctl status --no-pager openchami.target > /dev/null 2>&1; then
 fi
 
 # Remove stale postgres-data volume if present and dangling
-for retry in {1..10}; do
-    if ! sudo podman volume ls | grep -q postgres-data; then
-        break
-    fi
-    if sudo podman volume ls --filter dangling=true | grep -q postgres-data; then
-        # shellcheck disable=SC2015
-        sudo podman volume rm postgres-data && break || true
-    fi
-    sleep 5
-done
+#
+# First, find out what it is called. It could be 'postgres-data' or it could
+# be 'systemd-postgres-data' anything else is not a match.
+postgres_volume="$( \
+        sudo podman volume ls | \
+        grep -E '[[:space:]](systemd-)?postgres-data\b' | \
+        awk '{ printf $2 }' \
+)"
+if [[ -n "${postgres_volume}" ]]; then
+    info "start-openchami: clearing SMD / BSS data ['${postgres_volume}']"
+    for retry in {1..10}; do
+        if ! sudo podman volume ls | grep -q "${postgres_volume}"; then
+            break
+        fi
+        if sudo podman volume ls --filter dangling=true | grep -q "${postgres_volume}"; then
+            # shellcheck disable=SC2015
+            sudo podman volume rm "${postgres_volume}" && break || true
+        fi
+        sleep 5
+    done
+fi
 if [ "${retry}" -eq 10 ]; then
     { fail "timed out waiting to clear the SMD and BSS data"; exit 1; }
 fi
