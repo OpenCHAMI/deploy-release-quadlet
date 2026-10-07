@@ -28,12 +28,12 @@ fi
 
 # Remove stale postgres-data volume if present and dangling
 for retry in {1..10}; do
-    if ! sudo podman volume ls | grep -q postgres-data; then
+    if ! sudo podman volume ls | grep -q systemd-postgres-data; then
         break
     fi
-    if sudo podman volume ls --filter dangling=true | grep -q postgres-data; then
+    if sudo podman volume ls --filter dangling=true | grep -q systemd-postgres-data; then
         # shellcheck disable=SC2015
-        sudo podman volume rm postgres-data && break || true
+        sudo podman volume rm systemd-postgres-data && break || true
     fi
     sleep 5
 done
