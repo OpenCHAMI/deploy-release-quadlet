@@ -232,9 +232,12 @@ function create_compute_node() {
          --boot "${UEFI}" \
          --virt-type kvm \
          --noautoconsole
-{%- else %}
-    restart_compute_node "${node_name}" "${bmc_name}"
 {%- endif %}
+    # Restart the node whether we are in host mode and
+    # have just created it or we are in cluster mode and
+    # came here to restart it. This avoids some VM
+    # instability that can crop up just after virt-install.
+    restart_compute_node "${node_name}" "${bmc_name}"
 }
 
 # ── Get OCHAMI Token ─────────────────────────────────────────────
