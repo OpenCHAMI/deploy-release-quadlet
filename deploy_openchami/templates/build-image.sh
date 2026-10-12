@@ -1,6 +1,8 @@
 # SPDX-FileCopyrightText: (C) Copyright 2026 OpenCHAMI a Series of LF Projects, LLC
 # SPDX-License-Identifier: MIT
 
+source <(sudo cat /etc/versitygw/secrets.env)
+
 # Report a failure message on stderr
 function _bi_fail() {
     local func=${FUNCNAME[1]:-"unknown-function"} # Calling function
@@ -23,8 +25,8 @@ function build-image() {
            --network=host \
            --rm \
            --device /dev/fuse \
-           -e S3_ACCESS=admin \
-           -e S3_SECRET=admin123 \
+           -e S3_ACCESS="${ROOT_ACCESS_KEY}" \
+           -e S3_SECRET="${ROOT_SECRET_KEY}" \
            -v "$(realpath "${config}")":/home/builder/config.yaml:Z \
            ${EXTRA_PODMAN_ARGS} \
            "${builder}" \

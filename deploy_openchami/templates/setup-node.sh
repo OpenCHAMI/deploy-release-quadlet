@@ -8,7 +8,6 @@
 # - Install required packages
 # - Create the deployment user (check first, create if absent)
 # - Add deployment user to sudoers with NOPASSWD (check first)
-# - Copy deployment user's s3cfg file to user's directory
 # - Turn on IP forwarding
 # - Set up the virtual environment for 'host' mode if applicable
 #
@@ -154,12 +153,6 @@ else
     echo "${SUDOERS_LINE}" | sudo tee -a /etc/sudoers > /dev/null
     info "setup-node: passwordless sudo entry added for '${DEPLOY_USER}'"
 fi
-
-# ── Copy the deployment user's .s3cfg ─────────────────────────────────
-info "setup-s3-and-registry: installing .s3cfg for '${DEPLOY_USER}'"
-s3cfg=~{{ manifest.deployment_user.username }}/.s3cfg
-sudo cp "${DEPLOY_DIR}/s3cfg" "${s3cfg}"
-sudo chown "${DEPLOY_USER}":"${DEPLOY_GROUP}" "${s3cfg}"
 
 # ── Put cluster information in /etc/hosts ───────────────────
 info "setup-node: put cluster information in /etc/hosts"

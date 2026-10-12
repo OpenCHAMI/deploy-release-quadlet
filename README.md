@@ -320,7 +320,6 @@ OpenCHAMI. It does the following:
 - Install required packages
 - Create the deployment user (check first, create if absent)
 - Add deployment user to sudoers with NOPASSWD (check first)
-- Copy deployment user's s3cfg file to user's directory
 - Turn on IP forwarding
 - Set up the virtual environment for 'host' mode if applicable
 
