@@ -48,7 +48,6 @@ sudo dnf install -y ./ochami.rpm
 # ── Remove any existing openchami installation ────────────────────────
 info "prepare-openchami: removing any existing 'openchami' package"
 sudo dnf remove -y --noautoremove openchami || true
-sudo rm -rf /etc/openchami
 
 # ── Remove any existing openchami-release git repo ────────────────────
 info "prepare-openchami: removing old openchami-release repo (if any)"
