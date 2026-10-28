@@ -4,9 +4,9 @@
 
 # Phase 4: install-openchami
 #
+# - Install the OpenCHAMI Release RPM built by prepare-openchami
 # - Merge the openchami.env configuration file
 #   (/etc/openchami/configs/openchami.env)
-# - Install the OpenCHAMI Release RPM built by prepare-openchami
 #
 # Run as the deployment user; uses sudo for privileged operations.
 
@@ -58,6 +58,9 @@ function merge_openchami_env() {
 }
 
 # ── Install the OpenCHAMI Release RPM ─────────────────────────────────
+info "install-openchami: removing /etc/openchami/configs/openchami.env"
+sudo rm -f /etc/openchami/configs/openchami.env
+
 info "install-openchami: locating OpenCHAMI Release RPM"
 # shellcheck disable=SC2012
 RPM="$(ls "${DEPLOY_DIR}/openchami_release/openchami-"*.noarch.rpm 2>/dev/null | head -1)"
